@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+{% if user.is_authenticated %}
+<head>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</head>
+<body>
+<div class="card" style="margin-top: 0; border-top: none; padding: 0;">
+    <div class="card-body" style="padding: 10px; margin-left: 15px;">
+        <div class="container-fluid mb-0 mt-0" style="padding-left: 0;">
+            <div class="row d-flex align-items-center">
+                <div class="col-xl-9 d-flex align-items-center" style="padding-left: 15px;">
+                    <p style="color: #7e8d9f; font-size: 20px; margin: 0 20px 0 0;"><strong>Driver Name:</strong> {{ driver_name }}</p>
+                    <p style="color: #7e8d9f; font-size: 20px; margin: 0;"><strong>Count of Missions:</strong> {{ missions_count }}</p>
+                </div>
+                <div class="col-xl-3 text-end">
+                <a href="{% url 'drivers_index' %}" class="btn btn-light text-capitalize border-0 me-3" data-mdb-ripple-init data-mdb-ripple-color="dark">
+                        <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="input-group mb-3" style="margin: 30px">
+    {% if user.is_staff %}
+    <button style="height: 50px; border-radius: 0; margin-right: 20px; margin-top: 35px;" type="button" data-toggle="modal" data-target="#addModal" class="btn btn-primary add-button" data-id="{{ id }}"><i class="fas fa-plus"></i> Add New Mission</button>
+    {% else %}
+    <div style="height: 50px; border-radius: 0; margin-right: 20px; margin-top: 35px;"></div>
+    {% endif %}
+</div>
+<div style="margin: 30px;">
+    <table class="table table-striped table-borderless">
+  <thead>
+    <tr>
+      <th>Count of Vehicles</th>
+      <th>Customer Name</th>
+      <th>Customer Phone</th>
+      <th>Transportation Date</th>
+      <th>Receiving location</th>
+      <th>Delivery location</th>
+      <th>Estimated Cost</th>
+      <th>Additional Notes</th>
+      <th>Created at</th>
+      {% if user.is_staff %}
+      <th>Actions</th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+  {% if missions %}
+  {% for mission in missions %}
+  <tr>
+    <td class="align-middle">{{ mission.count }}</td>
+    <td class="align-middle">{{ mission.customer.name }}</td>
+    <td class="align-middle">{{ mission.customer.phone }}</td>
+    <td class="align-middle">{{ mission.date }}</td>
+    <td class="align-middle">{{ mission.from_location }}</td>
+    <td class="align-middle">{{ mission.to_location }}</td>
+    <td class="align-middle">{{ mission.cost }}</td>
+    <td class="align-middle">{{ mission.notes }}</td>
+    <td class="align-middle">{{ mission.created_at }}</td>
+  {% if user.is_staff %}
+  <td>
+    <div class="card-actions float-right">
+            <div class="dropdown show">
+                <a href="#" data-bs-toggle="dropdown" data-display="static">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-more-horizontal align-middle"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right">
+                    <a class="dropdown-item add-button" href="{% url 'mission_details' mission.id %}">Details</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ mission.id }}" data-driver="{{ mission.driver.name }}" data-name="{{ mission.customer.name }}" data-phone="{{ mission.customer.phone }}" data-date="{{ mission.date }}" data-from_location="{{ mission.from_location }}" data-to_location="{{ mission.to_location }}" data-cost="{{ mission.cost }}" data-notes="{{ mission.notes }}" data-description="{{ mission.description }}">Edit</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item delete-button" href="#" data-toggle="modal" data-target="#deleteModal" data-id="{{ mission.id }}">Delete</a>
+                </div>
+            </div>
+        </div>
+    </td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+  {% else %}
+  <tr>
+    <td colspan="10" class="text-center no-data-message" style="position: relative;">
+        <span class="no-data-text">No data available</span>
+    </td>
+</tr>
+  {% endif %}
+  </tbody>
+</table>
+</div>
+<!-- Modal -->
+        <div class="modal fade" id="addModal" tabindex="-1" role="dialog" aria-labelledby="addMissionModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addMissionModalLabel">Add New Mission</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="background-color: whitesmoke;">
+                        <form action="{% url 'add_mission' id %}" method="post" enctype="multipart/form-data" id="addForm">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="customer_name">Customer Name</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" autocomplete="off" list="list1" aria-label="list1" class="form-control" id="customer_name" name="name" onkeyup="fetch1()" required>
+                            <datalist id="list1">
+                            {% for customer in customers %}
+                            <option value="{{customer.name}}"></option>
+                            {% endfor %}
+                            </datalist>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="customer_phone">Phone</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="tel" class="form-control" autocomplete="off" id="customer_phone" name="phone" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="transportation_date">Transportation Date</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="transportation_date" name="date" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                        <div class="input-group mb-3" style="margin: 0">
+                            <div style="width: 49.75%;">
+                                <label style="color: darkblue; font-weight: bold;" for="receiving_location">Receiving Location</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="receiving_location" name="receiving_location" required>
+                            </div>
+                            <div style="width: 49.75%; margin-left: 0.5%;">
+                                <label style="color: darkblue; font-weight: bold;" for="delivery_location">Delivery Location</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="delivery_location" name="delivery_location" required>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="estimated_cost">Estimated Cost</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="number" class="form-control" id="estimated_cost" name="cost" min="0.0" value="0.0" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="notes">Notes</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="notes" name="notes">
+                        </div>
+                        <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" style="background-color: yellowgreen; width: 60px; height: 37px; border-radius: 5px; border-color: yellowgreen; color: white;">Add</button>
+                    </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<!-- Edit Modal -->
+        <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editMissionModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editMissionModalLabel">Edit Mission</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="background-color: whitesmoke;">
+                        <form action="{% url 'edit_mission' 0 %}" method="post" enctype="multipart/form-data" id="editForm">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-description">Mission Description</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="edit-description" name="description" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-driver">Driver Name</label>
+                            <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="edit-driver" name="driver" required>
+                                {% for driver in drivers %}
+                                <option>{{ driver.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-customer_name">Customer Name</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" autocomplete="off" list="list2" aria-label="list2" class="form-control" id="edit-customer_name" name="name" onkeyup="fetch2()" required>
+                            <datalist id="list2">
+                            {% for customer in customers %}
+                            <option value="{{customer.name}}"></option>
+                            {% endfor %}
+                            </datalist>
+                        </div>
+                        <br>
+                          <div class="form-group">
+                        <div class="input-group mb-3" style="margin: 0">
+                            <div style="width: 49.5%;">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-customer_phone">Phone</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="tel" class="form-control" autocomplete="off" id="edit-customer_phone" name="phone" required>
+                            </div>
+                            <div style="width: 49.5%; margin-left: 1%;">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-transportation_date">Transportation Date</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="edit-transportation_date" name="date" required>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="form-group">
+                        <div class="input-group mb-3" style="margin: 0">
+                            <div style="width: 49.75%;">
+                                <label style="color: darkblue; font-weight: bold;" for="edit-receiving_location">Receiving Location</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="edit-receiving_location" name="receiving_location" required>
+                            </div>
+                            <div style="width: 49.75%; margin-left: 0.5%;">
+                                <label style="color: darkblue; font-weight: bold;" for="edit-delivery_location">Delivery Location</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="edit-delivery_location" name="delivery_location" required>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-estimated_cost">Estimated Cost</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="number" class="form-control" id="edit-estimated_cost" name="cost" min="0.0" value="0.0" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-notes">Notes</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="edit-notes" name="notes">
+                        </div>
+                        <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save changes</button>
+                    </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form action="{% url 'delete_mission' 0 %}" method="post" id="deleteForm">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete the mission data?</p>
+                        <input type="hidden" id="delete-id" name="id">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<script>
+    var today = new Date();
+    // Format the date as YYYY-MM-DD
+    var formattedDate = today.toISOString().slice(0, 10);
+    document.getElementById('transportation_date').value = formattedDate;
+    $(document).on('click', '.edit-button', function() {
+    var id = $(this).data('id');
+    var description = $(this).data('description');
+    var driver = $(this).data('driver');
+    var name = $(this).data('name');
+    var phone = $(this).data('phone');
+    var date = $(this).data('date');
+    var from_location = $(this).data('from_location');
+    var to_location = $(this).data('to_location');
+    var cost = $(this).data('cost');
+    var notes = $(this).data('notes');
+    let dateObj = new Date(date);
+    // Format the Date object to "yyyy-mm-dd"
+    let year = dateObj.getFullYear();
+    let month = (dateObj.getMonth() + 1).toString().padStart(2, '0'); // getMonth() returns 0-based month
+    let day = dateObj.getDate().toString().padStart(2, '0');
+    let formattedDate = `${year}-${month}-${day}`;
+    $('#edit-description').val(description);
+    $('#edit-driver').val(driver);
+    $('#edit-customer_name').val(name);
+    $('#edit-customer_phone').val(phone);
+    $('#edit-transportation_date').val(formattedDate);
+    $('#edit-receiving_location').val(from_location);
+    $('#edit-delivery_location').val(to_location);
+    $('#edit-estimated_cost').val(cost);
+    $('#edit-notes').val(notes);
+    var action = $('#editForm').attr('action').replace('0', id);
+    $('#editForm').attr('action', action);
+    });
+    $(document).on('click', '.delete-button', function() {
+    var id = $(this).data('id');
+    $('#delete-id').val(id);
+    var action = $('#deleteForm').attr('action').replace('0', id);
+    $('#deleteForm').attr('action', action);
+    });
+</script>
+</body>
+{% else %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css?family=Raleway:400,700');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Raleway, sans-serif;
+}
+
+body {
+  /* Set the background image */
+    background-image: url('/static/image/bc.jpg');
+    /* Adjust background properties as needed */
+    background-size: cover;
+    background-position: center;
+}
+
+.ucontainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.screen {
+  background: linear-gradient(90deg, #5D54A4, #7C78B8);
+  position: relative;
+  height: 600px;
+  width: 360px;
+  box-shadow: 0px 0px 24px #5C5696;
+}
+
+.screen__content {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+}
+
+.screen__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  -webkit-clip-path: inset(0 0 0 0);
+  clip-path: inset(0 0 0 0);
+}
+
+.screen__background__shape {
+  transform: rotate(45deg);
+  position: absolute;
+}
+
+.screen__background__shape1 {
+  height: 520px;
+  width: 520px;
+  background: #FFF;
+  top: -50px;
+  right: 120px;
+  border-radius: 0 72px 0 0;
+}
+
+.screen__background__shape2 {
+  height: 220px;
+  width: 220px;
+  background: #6C63AC;
+  top: -172px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape3 {
+  height: 540px;
+  width: 190px;
+  background: linear-gradient(270deg, #5D54A4, #6A679E);
+  top: -24px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape4 {
+  height: 400px;
+  width: 200px;
+  background: #7E7BB9;
+  top: 420px;
+  right: 50px;
+  border-radius: 60px;
+}
+
+.login {
+  width: 320px;
+  padding: 30px;
+  padding-top: 156px;
+}
+
+.login__field {
+  padding: 20px 0px;
+  position: relative;
+}
+
+.login__icon {
+  position: absolute;
+  top: 30px;
+  color: #7875B5;
+}
+
+.login__input {
+  border: none;
+  border-bottom: 2px solid #D1D1D4;
+  background: none;
+  padding: 10px;
+  padding-left: 24px;
+  font-weight: 700;
+  width: 75%;
+  transition: .2s;
+}
+
+.login__input:active,
+.login__input:focus,
+.login__input:hover {
+  outline: none;
+  border-bottom-color: #6A679E;
+}
+
+.login__submit {
+  background: #fff;
+  font-size: 14px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  border-radius: 26px;
+  border: 1px solid #D4D3E8;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #4C489D;
+  box-shadow: 0px 2px 2px #5C5696;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.login__submit:active,
+.login__submit:focus,
+.login__submit:hover {
+  border-color: #6A679E;
+  outline: none;
+}
+
+.button__icon {
+  font-size: 24px;
+  margin-left: auto;
+  color: #7875B5;
+}
+
+.social-login {
+  position: absolute;
+  height: 140px;
+  width: 160px;
+  text-align: center;
+  bottom: 0px;
+  right: 0px;
+  color: #fff;
+}
+
+.social-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-login__icon {
+  padding: 20px 10px;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0px 0px 8px #7875B5;
+}
+
+.social-login__icon:hover {
+  transform: scale(1.5);
+}
+</style>
+<div class="ucontainer">
+  <div class="screen">
+    <div class="screen__content">
+      <form class="login" method="POST" autocomplete="off" action="{% url 'customers_index' %}">
+          {% csrf_token %}
+        <div class="login__field">
+          <i class="login__icon fas fa-user"></i>
+          <input type="text" id="username" name = "username" class="login__input" placeholder="User name">
+        </div>
+        <div class="login__field">
+          <i class="login__icon fas fa-lock"></i>
+          <input type="password" id="password" name="password" class="login__input" placeholder="Password">
+        </div>
+        <button class="button login__submit">
+          <span class="button__text">Log In Now</span>
+          <i class="button__icon fas fa-chevron-right"></i>
+        </button>
+      </form>
+      <div class="social-login">
+        <h3>log in via</h3>
+        <div class="social-icons">
+          <a href="#" class="social-login__icon fab fa-instagram"></a>
+          <a href="#" class="social-login__icon fab fa-facebook"></a>
+          <a href="#" class="social-login__icon fab fa-twitter"></a>
+        </div>
+      </div>
+    </div>
+    <div class="screen__background">
+      <span class="screen__background__shape screen__background__shape4"></span>
+      <span class="screen__background__shape screen__background__shape3"></span>
+      <span class="screen__background__shape screen__background__shape2"></span>
+      <span class="screen__background__shape screen__background__shape1"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

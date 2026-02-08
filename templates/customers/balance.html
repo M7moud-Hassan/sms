@@ -1,0 +1,631 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+{% if user.is_authenticated %}
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+<div class="card" style="margin-top: 0; border-top: none;">
+    <div class="card-body" style="padding: 5px;">
+    <div class="container mb-0 mt-0">
+        <div class="row d-flex align-items-center">
+        <div class="col-xl-9">
+          <p style="color: #7e8d9f;font-size: 20px; margin-top: 10px;">Customer Name : <strong>{{ customer_name }}</strong></p>
+        </div>
+            <div class="col-xl-3 float-end">
+                <a href="{% url 'customers_index' %}" class="btn btn-light text-capitalize border-0" data-mdb-ripple-init data-mdb-ripple-color="dark">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+                <a id="export-btn" href="{% url 'export_ctreasury' id 0 1 %}" class="btn btn-light text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="dark">
+                    <i class="fas fa-file-archive text-primary"></i> Export
+                </a>
+            </div>
+        </div>
+        </div>
+        </div>
+        </div>
+<div class="container mt-3">
+        <div class="row">
+<div class="col-md-4 col-sm-6 mb-3">
+            <div class="card text-white bg-info" style="max-width: 18rem;">
+                <div class="card-header" style="text-align: center;">Total of Invoices Amounts</div>
+                <div class="card-body">
+                    <h5 class="card-title" id="total_invoiced" style="text-align: center; font-weight: bold;"></h5>
+                    <p class="card-text" style="text-align: center;">JD</p>
+                </div>
+            </div>
+        </div>
+<div class="col-md-4 col-sm-6 mb-3">
+    <div class="card text-white bg-danger mb-3" style="max-width: 18rem; margin-top: 25px;">
+        <div class="card-header" style="text-align: center;">Total of Residual</div>
+        <div class="card-body">
+            <h5 class="card-title" id="required_amount" style="text-align: center; font-weight: bold;"></h5>
+            <p class="card-text" style="text-align: center;">JD</p>
+        </div>
+    </div>
+</div>
+<div class="col-md-4 col-sm-6 mb-3">
+    <div class="card text-white bg-warning mb-3" style="max-width: 18rem;">
+        <div class="card-header" style="text-align: center;">Total of Paid</div>
+        <div class="card-body">
+            <h5 class="card-title" id="total_treasury" style="text-align: center; font-weight: bold;"></h5>
+            <p class="card-text" style="text-align: center;">JD</p>
+        </div>
+    </div>
+</div>
+
+</div>
+</div>
+
+<div class="input-group mb-3" style="margin: 0 15px 30px 30px; height: 50%;">
+<div class="scrollable-div" style="margin: 30px; width: 40%;">
+<div class="input-group mb-3">
+<span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">From</span>
+<input type="date" id="date_from" name="start_date" class="form-control" style="text-align: center; margin-right: 3%; height: 50px;" aria-label="Date">
+<span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">To</span>
+<input type="date" id="date_to" name="end_date" class="form-control" style="text-align: center; height: 50px;" aria-label="Date">
+<input type="hidden" id="customer_id" value="{{ id }}">
+</div>
+    <table class="table align-middle mb-0 bg-white">
+  <thead style="background-color: lightgrey;">
+    <tr>
+      <th>Invoice Number</th>
+      <th>Driver Name</th>
+      <th>Amount</th>
+      <th>Created at</th>
+    </tr>
+  </thead>
+  <tbody id="invoices_body" style="height: 52px;">
+  </tbody>
+</table>
+</div>
+    <div class="scrollable-div" style="margin: 30px 0 30px 15px; width: 47%;">
+        <table class="table align-middle mb-0 bg-white">
+  <thead style="background-color: lightgrey;">
+    <tr>
+      <th>Voucher</th>
+      <th>Invoice</th>
+      <th>Amount</th>
+      <th>Payment Method</th>
+      <th>Created at</th>
+        {% if user.is_staff %}
+        <th>Actions</th>
+        {% endif %}
+    </tr>
+  </thead>
+  <tbody id="treasury_body" style="height: 52px;">
+  </tbody>
+</table>
+</div>
+    </div>
+<!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form action="{% url 'edit_ctreasury' 0 %}" method="post" id="editForm">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editModalLabel">Edit Payment Data</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="background-color: whitesmoke;">
+                        <input type="hidden" name="customer_id" value="{{id}}">
+                        <input type="hidden" id="edit-id" name="id">
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-amount">Amount in JD</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="number" step="any" class="form-control" id="edit-amount" name="edit-amount" required>
+                        </div>
+                        <br>
+                    <div class="form-group">
+                        <label style="color: darkblue; font-weight: bold;" for="edit-method">Payment Method</label>
+                        <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="edit-method" name="method" required>
+                            <option>Treasury</option>
+                            <option>Cheque</option>
+                        </select>
+                    </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form action="{% url 'delete_ctreasury' 0 %}" method="post" id="deleteForm">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete this payment?</p>
+                        <input type="hidden" name="customer_id" value="{{id}}">
+                        <input type="hidden" id="delete-id" name="id">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<!-- Toast container for notifications -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
+      top: 20px;        /* Distance from the top of the viewport */
+      right: 20px;      /* Distance from the right edge of the viewport */
+      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
+      min-width: 300px; /* Optional: Set a minimum width for the toasts */
+  }"></div>
+    <!-- Include Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+  fetch('/drivers/fetch-pmissions/')
+    .then(response => response.json())
+    .then(data => {
+      const pmissions = data.pmissions;
+      const toastContainer = document.getElementById('toast-container');
+      pmissions.forEach(function(mission) {
+        const toastHTML = `
+          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+              <strong class="mr-auto">${mission.customer_name}</strong>
+            </div>
+            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
+              From: ${mission.from_location}<br>
+              To: ${mission.to_location}<br>
+              Vehicle: ${mission.car_type} (${mission.car_num})
+            </div>
+          </div>
+        `;
+        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+        // Add click event to the toast to mark as read and close the toast
+        const toastElement = document.getElementById(`toast-${mission.id}`);
+        toastElement.addEventListener('click', function() {
+          markAsRead(mission.id);
+          $(toastElement).toast('hide'); // Close the toast after marking as read
+        });
+      });
+
+      // Initialize toast with autohide set to false
+      $('.toast').toast({
+        autohide: false
+      }).toast('show');  // Display all toasts without auto-hiding
+    })
+    .catch(error => {
+      console.error('Error fetching PMissions:', error);
+    });
+
+  // Mark the mission as read when clicked
+  function markAsRead(missionId) {
+    fetch(`/drivers/mark-as-read/${missionId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
+        'Content-Type': 'application/json'
+      },
+    }).then(response => response.json())
+      .then(data => {
+        console.log(`Mission ${missionId} marked as read`);
+      })
+      .catch(error => {
+        console.error('Error marking as read:', error);
+      });
+  }
+
+  // Function to get the CSRF token
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+});
+
+        // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
+        const inactivityTime = 300000;
+        // Variable to hold the inactivity timer
+        let inactivityTimer;
+        // Function to reset the timer
+        function resetTimer() {
+            // Clear the existing timer
+            clearTimeout(inactivityTimer);
+            // Set the timer again
+            inactivityTimer = setTimeout(() => {
+                location.reload(); // Refresh the page after the inactivity time
+            }, inactivityTime);
+        }
+        // List of events to listen to for resetting the timer
+        const events = ['mousemove', 'keydown', 'scroll', 'click'];
+        // Add event listeners for each event
+        events.forEach(event => {
+            window.addEventListener(event, resetTimer);
+        });
+        // Initialize the timer when the page loads
+        resetTimer();
+
+        document.getElementById('edit-amount').addEventListener('input', function() {
+            var max = this.max;
+            if (parseFloat(this.value) > parseFloat(max)) {
+                this.value = max;
+            }
+        });
+
+document.addEventListener('DOMContentLoaded', function () {
+    let date_from = document.getElementById('date_from');
+    let date_to = document.getElementById('date_to');
+    let invoicesTableBody = document.getElementById('invoices_body');
+    let treasuryTableBody = document.getElementById('treasury_body');
+    let totalInvoicedCard = document.getElementById('total_invoiced');
+    let totalTreasuryCard = document.getElementById('total_treasury');
+    let requiredAmountCard = document.getElementById('required_amount');
+    let customerId = document.getElementById('customer_id').value;
+    let exportBtn = document.getElementById('export-btn');
+    // Set default dates and fetch data initially
+    setDefaultDates();
+    date_from.oninput = date_to.onchange = function() {
+        updateExportUrl();
+        filterData();
+    };
+    function setDefaultDates() {
+        let endDate = new Date();
+        let startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - 6); // The previous Sunday
+        let formatDate = date => date.toISOString().split('T')[0];
+        date_to.value = formatDate(endDate);
+        date_from.value = formatDate(startDate);
+        updateExportUrl();
+        filterData();
+    }
+    function updateExportUrl() {
+        let dateFrom = date_from.value;
+        let dateTo = date_to.value;
+        let exportUrl = `/customers/export/${encodeURIComponent(customerId)}/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/`;
+        exportBtn.href = exportUrl; // Set the href attribute to the constructed URL
+    }
+    function filterData() {
+        var dateFrom = date_from.value;
+        var dateTo = date_to.value;
+        if (dateFrom && dateTo && customerId) {
+            $.ajax({
+                url: `/customers/filter/${customerId}/`,
+                method: 'GET',
+                data: {
+                    date_from: dateFrom,
+                    date_to: dateTo,
+                },
+                success: function(response) {
+                    displayInvoices(response.invoices);
+                    displayTreasury(response.treasury);
+                    updateTotals(response.total_invoiced, response.total_treasury, response.required_amount);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error fetching data:', error);
+                }
+            });
+        }
+    }
+    function displayInvoices(invoices) {
+        invoicesTableBody.innerHTML = '';
+        invoices.forEach(function(invoice) {
+            var driverName = invoice.driver__name || 'N/A';
+            var formattedDate = formatDate(invoice.created_at);
+            var row = `
+                <tr class="custom-row">
+                    <td>${invoice.number}</td>
+                    <td>${driverName}</td>
+                    <td>${invoice.tamount}</td>
+                    <td>${formattedDate}</td>
+                </tr>`;
+            invoicesTableBody.innerHTML += row;
+        });
+    }
+
+    function displayTreasury(treasury) {
+        treasuryTableBody.innerHTML = '';
+        treasury.forEach(function(entry) {
+            var formattedDate = formatDate(entry.created_at);
+            var row = `
+                <tr class="custom-row">
+                    <td>${entry.number}</td>
+                    <td>${entry.inumber}</td>
+                    <td>${entry.amount}</td>
+                    <td>${entry.payment}</td>
+                    <td>${formattedDate}</td>
+                    {% if user.is_staff %}
+                    <td>
+                        <button style="width: 70px; height: 36px;" class="btn btn-sm btn-primary edit-button"
+                            data-toggle="modal" data-target="#editModal" data-id="${entry.id}"
+                            data-amount="${entry.amount}" data-method="${entry.payment}">Edit</button>
+                        <button style="width: 70px; height: 36px;" class="btn btn-sm btn-danger delete-button"
+                            data-toggle="modal" data-target="#deleteModal" data-id="${entry.id}">Delete</button>
+                    </td>
+                    {% endif %}
+                </tr>`;
+            treasuryTableBody.innerHTML += row;
+        });
+    }
+
+    $(document).on('click', '.edit-button', function() {
+            var id = $(this).data('id');
+            var amount = $(this).data('amount');
+            var method = $(this).data('method');
+            $('#edit-id').val(id);
+            $('#edit-amount').val(amount);
+            $('#edit-method').val(method);
+            var action = $('#editForm').attr('action').replace('0', id);
+            $('#editForm').attr('action', action);
+        });
+        $(document).on('click', '.delete-button', function() {
+            var id = $(this).data('id');
+            $('#delete-id').val(id);
+            var action = $('#deleteForm').attr('action').replace('0', id);
+            $('#deleteForm').attr('action', action);
+        });
+    function updateTotals(totalInvoiced, totalTreasury, requiredAmount) {
+        totalInvoicedCard.innerText = Number(totalInvoiced).toFixed(2) || 0;
+        totalTreasuryCard.innerText = Number(totalTreasury).toFixed(2) || 0;
+        requiredAmountCard.innerText = Number(requiredAmount).toFixed(2) || 0;
+    }
+    function formatDate(dateString) {
+        var options = {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true,
+        };
+        var date = new Date(dateString);
+        return date.toLocaleString('en-US', options);
+    }
+});
+    </script>
+</body>
+{% else %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css?family=Raleway:400,700');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Raleway, sans-serif;
+}
+
+body {
+  /* Set the background image */
+    background-image: url('/static/image/bc.jpg');
+    /* Adjust background properties as needed */
+    background-size: cover;
+    background-position: center;
+}
+
+.ucontainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.screen {
+  background: linear-gradient(90deg, #5D54A4, #7C78B8);
+  position: relative;
+  height: 600px;
+  width: 360px;
+  box-shadow: 0px 0px 24px #5C5696;
+}
+
+.screen__content {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+}
+
+.screen__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  -webkit-clip-path: inset(0 0 0 0);
+  clip-path: inset(0 0 0 0);
+}
+
+.screen__background__shape {
+  transform: rotate(45deg);
+  position: absolute;
+}
+
+.screen__background__shape1 {
+  height: 520px;
+  width: 520px;
+  background: #FFF;
+  top: -50px;
+  right: 120px;
+  border-radius: 0 72px 0 0;
+}
+
+.screen__background__shape2 {
+  height: 220px;
+  width: 220px;
+  background: #6C63AC;
+  top: -172px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape3 {
+  height: 540px;
+  width: 190px;
+  background: linear-gradient(270deg, #5D54A4, #6A679E);
+  top: -24px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape4 {
+  height: 400px;
+  width: 200px;
+  background: #7E7BB9;
+  top: 420px;
+  right: 50px;
+  border-radius: 60px;
+}
+
+.login {
+  width: 320px;
+  padding: 30px;
+  padding-top: 156px;
+}
+
+.login__field {
+  padding: 20px 0px;
+  position: relative;
+}
+
+.login__icon {
+  position: absolute;
+  top: 30px;
+  color: #7875B5;
+}
+
+.login__input {
+  border: none;
+  border-bottom: 2px solid #D1D1D4;
+  background: none;
+  padding: 10px;
+  padding-left: 24px;
+  font-weight: 700;
+  width: 75%;
+  transition: .2s;
+}
+
+.login__input:active,
+.login__input:focus,
+.login__input:hover {
+  outline: none;
+  border-bottom-color: #6A679E;
+}
+
+.login__submit {
+  background: #fff;
+  font-size: 14px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  border-radius: 26px;
+  border: 1px solid #D4D3E8;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #4C489D;
+  box-shadow: 0px 2px 2px #5C5696;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.login__submit:active,
+.login__submit:focus,
+.login__submit:hover {
+  border-color: #6A679E;
+  outline: none;
+}
+
+.button__icon {
+  font-size: 24px;
+  margin-left: auto;
+  color: #7875B5;
+}
+
+.social-login {
+  position: absolute;
+  height: 140px;
+  width: 160px;
+  text-align: center;
+  bottom: 0px;
+  right: 0px;
+  color: #fff;
+}
+
+.social-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-login__icon {
+  padding: 20px 10px;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0px 0px 8px #7875B5;
+}
+
+.social-login__icon:hover {
+  transform: scale(1.5);
+}
+</style>
+<div class="ucontainer">
+  <div class="screen">
+    <div class="screen__content">
+      <form class="login" method="POST" autocomplete="off" action="{% url 'customers_index' %}">
+          {% csrf_token %}
+        <div class="login__field">
+          <i class="login__icon fas fa-user"></i>
+          <input type="text" id="username" name = "username" class="login__input" placeholder="User name">
+        </div>
+        <div class="login__field">
+          <i class="login__icon fas fa-lock"></i>
+          <input type="password" id="password" name="password" class="login__input" placeholder="Password">
+        </div>
+        <button class="button login__submit">
+          <span class="button__text">Log In Now</span>
+          <i class="button__icon fas fa-chevron-right"></i>
+        </button>
+      </form>
+      <div class="social-login">
+        <h3>log in via</h3>
+        <div class="social-icons">
+          <a href="#" class="social-login__icon fab fa-instagram"></a>
+          <a href="#" class="social-login__icon fab fa-facebook"></a>
+          <a href="#" class="social-login__icon fab fa-twitter"></a>
+        </div>
+      </div>
+    </div>
+    <div class="screen__background">
+      <span class="screen__background__shape screen__background__shape4"></span>
+      <span class="screen__background__shape screen__background__shape3"></span>
+      <span class="screen__background__shape screen__background__shape2"></span>
+      <span class="screen__background__shape screen__background__shape1"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

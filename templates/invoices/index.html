@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+{% if user.is_authenticated %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Datatable CSS -->
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+            position: relative;
+            padding-right: 20px; /* Space for arrow */
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .arrow {
+            position: absolute;
+            right: 5px;
+            display: inline-block;
+        }
+
+        .arrow.asc::after {
+            content: "↑";
+        }
+
+        .arrow.desc::after {
+            content: "↓";
+        }
+
+        .no-sort::after {
+            content: "↕";
+            color: #ccc;
+        }
+        .form-check-input {
+            position: relative;
+            z-index: 10;
+        }
+.pagination {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pagination .btn {
+    padding: 8px 12px;
+    text-decoration: none;
+    color: white;
+    background: linear-gradient(to right, #007bff, #0056b3);
+    border-radius: 6px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.pagination .btn:hover {
+    background: linear-gradient(to right, #0056b3, #003d82);
+    transform: translateY(-2px);
+}
+
+.pagination .current-page {
+    font-size: 16px;
+    font-weight: bold;
+    padding: 6px 12px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    color: #333;
+}
+
+    </style>
+</head>
+<body>
+  <div class="container-fluid" style="margin-top: 20px;">
+    <form method="get">
+        <div class="row align-items-end mb-1">  <!-- Changed to align-items-end -->
+            <!-- Left Column - Dates and Buttons -->
+            <div class="col-md-8 col-lg-9">
+                <div class="d-flex flex-wrap align-items-center">  <!-- Ensure vertical alignment -->
+                    <!-- Date Inputs -->
+                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
+                        <span class="input-group-text bg-primary text-white px-2">From</span>
+                        <input type="date" id="start_date" name="start_date" class="form-control" value="{{start_date}}" style="min-width: 120px;">
+                    </div>
+                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
+                        <span class="input-group-text bg-primary text-white px-2">To</span>
+                        <input type="date" id="end_date" name="end_date" class="form-control" value="{{end_date}}" style="min-width: 120px;">
+                    </div>
+                    <div class="me-3 mb-3">
+                    {{ form.query }}
+                    </div>
+                    <!-- Buttons -->
+                    <div class="d-flex mb-2 mb-md-0">
+                        <button type="submit" name="search" class="btn btn-primary me-2" style="min-width: 100px; height: 38px;">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <button type="submit" name="export" class="btn btn-success" style="min-width: 100px; height: 38px;">
+                            <i class="fas fa-file-export"></i> Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column - Radio Buttons -->
+            <div class="col-md-4 col-lg-3">
+                <div class="d-flex flex-wrap justify-content-center align-items-center" style="height: 50px;">  <!-- Fixed height matching buttons -->
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio0" value="option0" checked>
+                        <label class="form-check-label" for="inlineRadio0">All</label>
+                    </div>
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio1" value="option1">
+                        <label class="form-check-label" for="inlineRadio1">Debtor</label>
+                    </div>
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio2" value="option2">
+                        <label class="form-check-label" for="inlineRadio2">Receivable</label>
+                    </div>
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio3" value="option3">
+                        <label class="form-check-label" for="inlineRadio3">Cash</label>
+                    </div>
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio4" value="option4">
+                        <label class="form-check-label" for="inlineRadio4">Click</label>
+                    </div>
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio5" value="option5">
+                        <label class="form-check-label" for="inlineRadio5">Unsubmitted</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+<div id="itable1" class="scrollable-div" style="margin: 25px;">
+<table id="myTable">
+  <thead>
+    <tr>
+      <th>Number <span class="arrow no-sort"></span></th>
+      <th>Invoice Date <span class="arrow no-sort"></span></th>
+      <th>Payment System <span class="arrow no-sort"></span></th>
+      <th>Customer <span class="arrow no-sort"></span></th>
+      <th>Amount <span class="arrow no-sort"></span></th>
+      <th>Vehicle No. <span class="arrow no-sort"></span></th>
+      <th>Driver Name <span class="arrow no-sort"></span></th>
+      <th>Tax Status <span class="arrow no-sort"></span></th>
+      <th>Created at <span class="arrow no-sort"></span></th>
+      <th>Notes <span class="arrow no-sort"></span></th>
+      {% if user.is_staff %}
+      <th>Actions</th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+  {% if page_obj %}
+  {% for invoice in page_obj %}
+  <tr>
+    <td class="align-middle">{{ invoice.number }}</td>
+    <td class="align-middle">{{ invoice.date }}</td>
+    <td class="align-middle">{{ invoice.type }}</td>
+    <td class="align-middle">{{ invoice.require_id }}</td>
+    <td class="align-middle">{{ invoice.tamount }}</td>
+    <td class="align-middle">{{ invoice.car }}</td>
+    <td class="align-middle">{{ invoice.driver.name }}</td>
+    <td class="align-middle text-center">
+    {% if invoice.fotarah_sent %}
+        {% if invoice.fotarah_success %}
+            <span class="text-success" title="Successfully submitted to tax system">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                </svg>
+            </span>
+        {% else %}
+            <span class="text-danger" title="Tax submission failed">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
+                </svg>
+            </span>
+        {% endif %}
+        {% else %}
+            <span class="text-secondary" title="Not submitted to tax system">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                </svg>
+            </span>
+        {% endif %}
+    </td>
+    <td class="align-middle">{{ invoice.adjusted_created_at }}</td>
+    <td class="align-middle">{{ invoice.notes|default:''}}</td>
+    <td class="align-middle">
+        <div class="card-actions float-left">
+            <div class="dropdown show">
+                <a href="#" data-bs-toggle="dropdown" data-display="static">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-more-horizontal align-middle"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right">
+                    {% if user.is_staff %}
+                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ invoice.id }}" data-number="{{ invoice.number }}" data-date="{{ invoice.date }}" data-system="{{ invoice.type }}" data-customer="{{ invoice.require }}" data-vehicle="{{ invoice.vehicle }}" data-exported="{{ invoice.exported }}" data-notes="{{ invoice.notes|default:'' }}">Edit</a>
+                    <div class="dropdown-divider"></div>
+                    {% endif %}
+                    <a class="dropdown-item" href="{% url 'invoice_details' invoice.number %}">Details</a>
+                </div>
+            </div>
+        </div>
+    </td>
+    </tr>
+  {% endfor %}
+  {% else %}
+  <tr>
+    <td colspan="11" class="text-center no-data-message" style="position: relative;">
+        <span class="no-data-text">No data available</span>
+    </td>
+</tr>
+  {% endif %}
+  </tbody>
+</table>
+</div>
+
+<div class="container-fluid mb-3 px-0 px-md-2" style="margin-left: 20px;">
+  <div class="row g-2 g-md-3 align-items-center">
+    <!-- Count of Invoices -->
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+      <div class="input-group">
+        <span class="input-group-text bg-primary text-white">Count of Invoices</span>
+        <input type="text" class="form-control text-center" value="{{number_of_invoices}}" readonly>
+      </div>
+    </div>
+
+    <!-- Total of Amounts -->
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+      <div class="input-group">
+        <span class="input-group-text bg-primary text-white">Total of Amounts</span>
+        <input type="text" class="form-control text-center" value="{{total_invoiced}}" readonly>
+      </div>
+    </div>
+
+    <!-- Pagination (Aligned to the Right) -->
+    <div class="col-12 col-md-4 col-lg-6 d-flex justify-content-end">
+  <div class="pagination" style="margin-right: 30px;">
+    {% if page_obj.has_previous %}
+      <a href="?{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}{% if request.GET.inlineRadioOptions %}search=&inlineRadioOptions={{ request.GET.inlineRadioOptions }}&{% endif %}{% if request.GET.query %}query={{ request.GET.query }}&{% endif %}page=1" class="btn">« First</a>
+      <a href="?{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}{% if request.GET.inlineRadioOptions %}search=&inlineRadioOptions={{ request.GET.inlineRadioOptions }}&{% endif %}{% if request.GET.query %}query={{ request.GET.query }}&{% endif %}page={{ page_obj.previous_page_number }}" class="btn">‹ Prev</a>
+    {% endif %}
+    <span class="current-page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}{% if request.GET.inlineRadioOptions %}search=&inlineRadioOptions={{ request.GET.inlineRadioOptions }}&{% endif %}{% if request.GET.query %}query={{ request.GET.query }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn">Next ›</a>
+      <a href="?{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}{% if request.GET.inlineRadioOptions %}search=&inlineRadioOptions={{ request.GET.inlineRadioOptions }}&{% endif %}{% if request.GET.query %}query={{ request.GET.query }}&{% endif %}page={{ page_obj.paginator.num_pages }}" class="btn">Last »</a>
+    {% endif %}
+  </div>
+</div>
+  </div>
+</div>
+</div>
+<!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form action="{% url 'edit_invoice' 0 %}" method="post" id="editForm">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editModalLabel">Edit Invoice Data</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="background-color: whitesmoke;">
+                        <input type="hidden" id="edit-id" name="id">
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-number">Invoice Number</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="number" autocomplete="off" class="form-control" id="edit-number" name="number" min="1" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-date">Invoice Date</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="edit-date" name="date" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-system">Payment System</label>
+                            <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="edit-system" name="system" required>
+                                <option>نقدي</option>
+                                <option>ذمم</option>
+                                <option>كليك</option>
+                            </select>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                        <label style="color: darkblue; font-weight: bold;" for="edit-vehicle">Used Vehicle</label>
+                        <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="edit-vehicle" name="vehicle" required>
+                        <option></option>
+                        {% for vehicle in vehicles %}
+                        <option>{{ vehicle }}</option>
+                        {% endfor %}
+                        </select>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-exported">Shared</label>
+                            <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="edit-exported" name="exported">
+                                <option></option>
+                                <option>Done</option>
+                            </select>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-notes">Notes</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="edit-notes" name="notes">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% if options == "option1" %}
+<script>
+var radioButton = document.getElementById('inlineRadio1');
+radioButton.checked = true;
+</script>
+{% endif %}
+{% if options == "option2" %}
+<script>
+var radioButton = document.getElementById('inlineRadio2');
+radioButton.checked = true;
+</script>
+{% endif %}
+{% if options == "option3" %}
+<script>
+var radioButton = document.getElementById('inlineRadio3');
+radioButton.checked = true;
+</script>
+{% endif %}
+{% if options == "option4" %}
+<script>
+var radioButton = document.getElementById('inlineRadio4');
+radioButton.checked = true;
+</script>
+{% endif %}
+{% if options == "option5" %}
+<script>
+var radioButton = document.getElementById('inlineRadio5');
+radioButton.checked = true;
+</script>
+{% endif %}
+<!-- Toast container for notifications -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
+      top: 20px;        /* Distance from the top of the viewport */
+      right: 20px;      /* Distance from the right edge of the viewport */
+      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
+      min-width: 300px; /* Optional: Set a minimum width for the toasts */
+  }"></div>
+    <!-- Include Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const table = document.getElementById('myTable');
+    const headers = table.querySelectorAll('th');
+
+    headers.forEach(function(header, index) {
+        header.addEventListener('click', function() {
+            sortTable(index);
+        });
+    });
+
+    function sortTable(columnIndex) {
+        let rows, switching, i, x, y, shouldSwitch, dir, switchCount = 0;
+        switching = true;
+        dir = "asc";
+
+        // Reset all arrows only if they exist
+        headers.forEach(header => {
+            const arrow = header.querySelector('.arrow');
+            if (arrow) arrow.className = 'arrow no-sort';
+        });
+
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[columnIndex];
+                y = rows[i + 1].getElementsByTagName("TD")[columnIndex];
+
+                if (dir === "asc") {
+                    if (isNaN(x.innerText) ?
+                        x.innerText.toLowerCase() > y.innerText.toLowerCase() :
+                        parseFloat(x.innerText) > parseFloat(y.innerText)) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                } else if (dir === "desc") {
+                    if (isNaN(x.innerText) ?
+                        x.innerText.toLowerCase() < y.innerText.toLowerCase() :
+                        parseFloat(x.innerText) < parseFloat(y.innerText)) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                }
+            }
+
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchCount++;
+            } else {
+                if (switchCount === 0 && dir === "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+
+        // Update the arrow for the clicked column only if it exists
+        const arrow = headers[columnIndex].querySelector('.arrow');
+        if (arrow) arrow.className = 'arrow ' + dir;
+        }
+        // Select the submit button
+        const submitButton = document.querySelector('button[type="submit"][name="search"]');
+        // Get the date input fields and radio buttons
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+        const radioButtons = document.querySelectorAll('input[name="inlineRadioOptions"]');
+        // Add change event listener to date inputs
+        startDateInput.addEventListener('change', function() {
+            submitButton.click();
+        });
+        endDateInput.addEventListener('change', function() {
+            submitButton.click();
+        });
+        // Add change event listener to radio buttons
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', function() {
+                submitButton.click();
+            });
+        });
+    });
+    document.addEventListener('DOMContentLoaded', function() {
+  fetch('/drivers/fetch-pmissions/')
+    .then(response => response.json())
+    .then(data => {
+      const pmissions = data.pmissions;
+      const toastContainer = document.getElementById('toast-container');
+      pmissions.forEach(function(mission) {
+        const toastHTML = `
+          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+              <strong class="mr-auto">${mission.customer_name}</strong>
+            </div>
+            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
+              From: ${mission.from_location}<br>
+              To: ${mission.to_location}<br>
+              Vehicle: ${mission.car_type} (${mission.car_num})
+            </div>
+          </div>
+        `;
+        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+        // Add click event to the toast to mark as read and close the toast
+        const toastElement = document.getElementById(`toast-${mission.id}`);
+        toastElement.addEventListener('click', function() {
+          markAsRead(mission.id);
+          $(toastElement).toast('hide'); // Close the toast after marking as read
+        });
+      });
+
+      // Initialize toast with autohide set to false
+      $('.toast').toast({
+        autohide: false
+      }).toast('show');  // Display all toasts without auto-hiding
+    })
+    .catch(error => {
+      console.error('Error fetching PMissions:', error);
+    });
+
+  // Mark the mission as read when clicked
+  function markAsRead(missionId) {
+    fetch(`/drivers/mark-as-read/${missionId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
+        'Content-Type': 'application/json'
+      },
+    }).then(response => response.json())
+      .then(data => {
+        console.log(`Mission ${missionId} marked as read`);
+      })
+      .catch(error => {
+        console.error('Error marking as read:', error);
+      });
+  }
+
+  // Function to get the CSRF token
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+});
+
+    function setDynamicHeight() {
+        // Get the screen height
+        let screenHeight = window.innerHeight;
+        // Calculate a percentage of the screen height (e.g., 35%)
+        let dynamicHeight = screenHeight * 0.62;
+        // Set the height of the div
+        document.getElementById("itable1").style.height = dynamicHeight + "px";
+    }
+
+    // Set the height on page load
+    window.onload = setDynamicHeight;
+    // Update the height if the window is resized
+    window.onresize = setDynamicHeight;
+        // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
+        const inactivityTime = 300000;
+        // Variable to hold the inactivity timer
+        let inactivityTimer;
+        // Function to reset the timer
+        function resetTimer() {
+            // Clear the existing timer
+            clearTimeout(inactivityTimer);
+            // Set the timer again
+            inactivityTimer = setTimeout(() => {
+                location.reload(); // Refresh the page after the inactivity time
+            }, inactivityTime);
+        }
+        // List of events to listen to for resetting the timer
+        const events = ['mousemove', 'keydown', 'scroll', 'click'];
+        // Add event listeners for each event
+        events.forEach(event => {
+            window.addEventListener(event, resetTimer);
+        });
+        // Initialize the timer when the page loads
+        resetTimer();
+$(document).on('click', '.edit-button', function() {
+    var id = $(this).data('id');
+    var number = $(this).data('number');
+    var date = $(this).data('date');
+    var system = $(this).data('system');
+    var customer = $(this).data('customer');
+    var vehicle = $(this).data('vehicle');
+    var exported = $(this).data('exported');
+    var notes = $(this).data('notes');
+    // Convert the date string to a Date object
+    let dateObj = new Date(date);
+    // Format the Date object to "yyyy-mm-dd"
+    let year = dateObj.getFullYear();
+    let month = (dateObj.getMonth() + 1).toString().padStart(2, '0'); // getMonth() returns 0-based month
+    let day = dateObj.getDate().toString().padStart(2, '0');
+    let formattedDate = `${year}-${month}-${day}`;
+    $('#edit-id').val(id);
+    $('#edit-number').val(number);
+    $('#edit-date').val(formattedDate);
+    $('#edit-system').val(system);
+    $('#edit-customer').val(customer);
+    $('#old-customer').val(customer);
+    $('#edit-vehicle').val(vehicle);
+    $('#edit-exported').val(exported);
+    $('#edit-notes').val(notes);
+    var action = $('#editForm').attr('action').replace('0', id);
+    $('#editForm').attr('action', action);
+});
+</script>
+</body>
+{% if result != "ok" %}
+<script>
+    // Get today's date
+    var today = new Date();
+    // Format today's date as YYYY-MM-DD
+    var formattedToday = today.toISOString().split('T')[0];
+    // Set the end date to today
+    document.getElementById('end_date').value = formattedToday;
+    document.getElementById('end_date').max = formattedToday;
+    // Calculate the date for one week ago
+    var oneWeekAgo = new Date();
+    oneWeekAgo.setDate(today.getDate() - 6);
+    // Format the date for one week ago as YYYY-MM-DD
+    var formattedOneWeekAgo = oneWeekAgo.toISOString().split('T')[0];
+    // Set the start date to one week ago
+    document.getElementById('start_date').value = formattedOneWeekAgo;
+</script>
+{% endif %}
+{% else %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css?family=Raleway:400,700');
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Raleway, sans-serif;
+}
+
+body {
+  /* Set the background image */
+    background-image: url('/static/image/bc.jpg');
+    /* Adjust background properties as needed */
+    background-size: cover;
+    background-position: center;
+}
+
+.ucontainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.screen {
+  background: linear-gradient(90deg, #5D54A4, #7C78B8);
+  position: relative;
+  height: 600px;
+  width: 360px;
+  box-shadow: 0px 0px 24px #5C5696;
+}
+
+.screen__content {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+}
+
+.screen__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  -webkit-clip-path: inset(0 0 0 0);
+  clip-path: inset(0 0 0 0);
+}
+
+.screen__background__shape {
+  transform: rotate(45deg);
+  position: absolute;
+}
+
+.screen__background__shape1 {
+  height: 520px;
+  width: 520px;
+  background: #FFF;
+  top: -50px;
+  right: 120px;
+  border-radius: 0 72px 0 0;
+}
+
+.screen__background__shape2 {
+  height: 220px;
+  width: 220px;
+  background: #6C63AC;
+  top: -172px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape3 {
+  height: 540px;
+  width: 190px;
+  background: linear-gradient(270deg, #5D54A4, #6A679E);
+  top: -24px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape4 {
+  height: 400px;
+  width: 200px;
+  background: #7E7BB9;
+  top: 420px;
+  right: 50px;
+  border-radius: 60px;
+}
+
+.login {
+  width: 320px;
+  padding: 30px;
+  padding-top: 156px;
+}
+
+.login__field {
+  padding: 20px 0px;
+  position: relative;
+}
+
+.login__icon {
+  position: absolute;
+  top: 30px;
+  color: #7875B5;
+}
+
+.login__input {
+  border: none;
+  border-bottom: 2px solid #D1D1D4;
+  background: none;
+  padding: 10px;
+  padding-left: 24px;
+  font-weight: 700;
+  width: 75%;
+  transition: .2s;
+}
+
+.login__input:active,
+.login__input:focus,
+.login__input:hover {
+  outline: none;
+  border-bottom-color: #6A679E;
+}
+
+.login__submit {
+  background: #fff;
+  font-size: 14px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  border-radius: 26px;
+  border: 1px solid #D4D3E8;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #4C489D;
+  box-shadow: 0px 2px 2px #5C5696;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.login__submit:active,
+.login__submit:focus,
+.login__submit:hover {
+  border-color: #6A679E;
+  outline: none;
+}
+
+.button__icon {
+  font-size: 24px;
+  margin-left: auto;
+  color: #7875B5;
+}
+
+.social-login {
+  position: absolute;
+  height: 140px;
+  width: 160px;
+  text-align: center;
+  bottom: 0px;
+  right: 0px;
+  color: #fff;
+}
+
+.social-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-login__icon {
+  padding: 20px 10px;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0px 0px 8px #7875B5;
+}
+
+.social-login__icon:hover {
+  transform: scale(1.5);
+}
+</style>
+<div class="ucontainer">
+  <div class="screen">
+    <div class="screen__content">
+      <form class="login" method="POST" autocomplete="off" action="{% url 'invoices_index' %}">
+          {% csrf_token %}
+        <div class="login__field">
+          <i class="login__icon fas fa-user"></i>
+          <input type="text" id="username" name = "username" class="login__input" placeholder="User name">
+        </div>
+        <div class="login__field">
+          <i class="login__icon fas fa-lock"></i>
+          <input type="password" id="password" name="password" class="login__input" placeholder="Password">
+        </div>
+        <button class="button login__submit">
+          <span class="button__text">Log In Now</span>
+          <i class="button__icon fas fa-chevron-right"></i>
+        </button>
+      </form>
+      <div class="social-login">
+        <h3>log in via</h3>
+        <div class="social-icons">
+          <a href="#" class="social-login__icon fab fa-instagram"></a>
+          <a href="#" class="social-login__icon fab fa-facebook"></a>
+          <a href="#" class="social-login__icon fab fa-twitter"></a>
+        </div>
+      </div>
+    </div>
+    <div class="screen__background">
+      <span class="screen__background__shape screen__background__shape4"></span>
+      <span class="screen__background__shape screen__background__shape3"></span>
+      <span class="screen__background__shape screen__background__shape2"></span>
+      <span class="screen__background__shape screen__background__shape1"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

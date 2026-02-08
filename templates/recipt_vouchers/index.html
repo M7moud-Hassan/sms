@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+{% if user.is_authenticated %}
+<head>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+    .modal-body img {
+    width: 100%;
+    height: auto;
+}  body {
+    margin: 0;
+    padding: 0;
+}
+  /* Style for the main form */
+  form {
+    /* Set overflow to hidden to remove scrollbars */
+    overflow: hidden;
+    /* Ensure no padding or margin */
+    padding: 0;
+    margin: 0;
+  }
+    </style>
+        </head>
+<body>
+<div class="input-group mb-3" style="margin: 30px;">
+    <form method="get" class="mb-3" style="position: absolute; right: 60px;">
+    <div class="input-group">
+    <div>
+    <div class="input-group mb-3" style="margin-top: 10px;">
+    <span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">From</span>
+    <input type="date" id="start_date" name="start_date" class="form-control" style="text-align: center; margin-right: 3%; height: 50px;" aria-label="Date" value="{{start_date}}">
+    <span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">To</span>
+    <input type="date" id="end_date" name="end_date" class="form-control" style="text-align: center; height: 50px;" aria-label="Date" value="{{end_date}}">
+    </div>
+    <div class="form-check form-check-inline" style="margin-left: 50px;">
+    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio0" value="option0" checked />
+    <label class="form-check-label" for="inlineRadio0">Missions</label>
+    </div>
+    <div class="form-check form-check-inline">
+    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio1" value="option1" />
+    <label class="form-check-label" for="inlineRadio1">Received</label>
+    </div>
+    <div class="form-check form-check-inline">
+    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio2" value="option2" />
+    <label class="form-check-label" for="inlineRadio2">Delivered</label>
+    </div>
+    <div class="form-check form-check-inline">
+    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="inlineRadio3" value="option3" />
+    <label class="form-check-label" for="inlineRadio3">Invoiced</label>
+    </div>
+    </div>
+    {{ form.as_p }}
+    <button style="border-radius: 0; margin-top: 10px; height: 50px;" type="submit" name="search" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+    </div>
+    </form>
+</div>
+
+<div id="itable1" class="scrollable-div" style="margin: 120px 30px 30px 30px;">
+    <table class="table table-striped table-borderless">
+  {% if options == "option0" %}
+    <thead>
+    <tr>
+      <th>Driver Name</th>
+      <th>Count of Vehicles</th>
+      <th>Owner</th>
+      <th>Pick-up Location</th>
+      <th>Drop-off Location</th>
+      <th>Mission Date</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% if vouchers %}
+  {% for voucher in vouchers %}
+  <tr>
+    <td class="align-middle">{{ voucher.driver.name }}</td>
+    <td class="align-middle">{{ voucher.count }}</td>
+    <td class="align-middle">{{ voucher.customer.name }}</td>
+    <td class="align-middle">{{ voucher.from_location }}</td>
+    <td class="align-middle">{{ voucher.to_location }}</td>
+    <td class="align-middle">{{ voucher.date }}</td>
+    <td class="align-middle">{{ voucher.notes }}</td>
+  </tr>
+  {% endfor %}
+  {% else %}
+  <tr>
+    <td colspan="7" class="text-center no-data-message" style="position: relative;">
+        <span class="no-data-text">No data available</span>
+    </td>
+</tr>
+  {% endif %}
+  </tbody>
+  {% elif options == "option1" %}
+    <thead>
+    <tr>
+      <th>Driver Name</th>
+      <th>Vehicle Number</th>
+      <th>Owner</th>
+      <th>Stroke</th>
+      <th>Deliverer</th>
+      <th>Deliverer Signature</th>
+      <th>Pick-up Location</th>
+      <th>Pick-up Date</th>
+      <th>Notes</th>
+      <th>Attachments</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% if vouchers %}
+  {% for voucher in vouchers %}
+  <tr>
+    <td class="align-middle">{{ voucher.driver_name }}</td>
+    <td class="align-middle">{{ voucher.car_num }}</td>
+    <td class="align-middle">{{ voucher.car_owner }}</td>
+    {% if voucher.strike_chart %}
+    <td class="align-middle"><img src="{{ voucher.strike_chart.url }}" class="img-thumbnail" style="width: 60px; height: auto; cursor: pointer;" data-toggle="modal" data-target="#viewImageModal" data-src="{{ voucher.strike_chart.url }}" data-description="Vehicle Number: {{ voucher.car_num }}"></td>
+    {% else %}
+    <td class="align-middle"></td>
+    {% endif %}
+    <td class="align-middle">{{ voucher.recipient_from_name | default:'' }}</td>
+    {% if voucher.receipt_from_signature %}
+    <td class="align-middle"><img src="{{ voucher.receipt_from_signature.url }}" class="img-thumbnail" style="width: 60px; max-height: 60px; cursor: pointer;" data-toggle="modal" data-target="#viewImageModal" data-src="{{ voucher.receipt_from_signature.url }}" data-description="Deliverer: {{ voucher.recipient_from_name }}"></td>
+    {% else %}
+    <td class="align-middle"></td>
+    {% endif %}
+    <td class="align-middle">{{ voucher.receipt_from_location | default:'' }}</td>
+    {% if voucher.recipient_from_name %}
+    <td class="align-middle">{{ voucher.adjusted_receipt_from_time }}</td>
+    {% else %}
+    <td></td>
+    {% endif %}
+    <td class="align-middle">{{ voucher.notes | default:'' }}</td>
+    <td class="align-middle">
+    <button style="color: white;" class="btn btn-info" data-toggle="modal" data-target="#attachmentsModal" data-id="{{ voucher.id }}">
+        <i class="fas fa-eye"></i> View
+    </button>
+</td>
+  </tr>
+  {% endfor %}
+  {% else %}
+  <tr>
+    <td colspan="10" class="text-center no-data-message" style="position: relative;">
+        <span class="no-data-text">No data available</span>
+    </td>
+</tr>
+  {% endif %}
+  </tbody>
+  {% else %}
+  <thead>
+    <tr>
+      <th>Driver Name</th>
+      <th>Vehicle Number</th>
+      <th>Owner</th>
+      <th>Stroke</th>
+      <th>Deliverer</th>
+      <th>Deliverer Signature</th>
+      <th>Recipient</th>
+      <th>Recipient Signature</th>
+      <th>Pick-up Location</th>
+      <th>Drop-off Location</th>
+      <th>Pick-up Date</th>
+      <th>Drop-off Date</th>
+      <th>Notes</th>
+      <th>Attachments</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% if vouchers %}
+  {% for voucher in vouchers %}
+  <tr>
+    <td class="align-middle">{{ voucher.driver_name }}</td>
+    <td class="align-middle">{{ voucher.car_num }}</td>
+    <td class="align-middle">{{ voucher.car_owner }}</td>
+    {% if voucher.strike_chart %}
+    <td class="align-middle"><img src="{{ voucher.strike_chart.url }}" class="img-thumbnail" style="width: 60px; height: auto; cursor: pointer;" data-toggle="modal" data-target="#viewImageModal" data-src="{{ voucher.strike_chart.url }}" data-description="Vehicle Number: {{ voucher.car_num }}"></td>
+    {% else %}
+    <td class="align-middle"></td>
+    {% endif %}
+    <td class="align-middle">{{ voucher.recipient_from_name | default:'' }}</td>
+    {% if voucher.receipt_from_signature %}
+    <td class="align-middle"><img src="{{ voucher.receipt_from_signature.url }}" class="img-thumbnail" style="width: 60px; max-height: 60px; cursor: pointer;" data-toggle="modal" data-target="#viewImageModal" data-src="{{ voucher.receipt_from_signature.url }}" data-description="Deliverer: {{ voucher.recipient_from_name }}"></td>
+    {% else %}
+    <td class="align-middle"></td>
+    {% endif %}
+    <td class="align-middle">{{ voucher.recipient_to_name | default:'' }}</td>
+    {% if voucher.receipt_to_signature %}
+    <td class="align-middle"><img src="{{ voucher.receipt_to_signature.url }}" class="img-thumbnail" style="width: 60px; max-height: 60px; cursor: pointer;" data-toggle="modal" data-target="#viewImageModal" data-src="{{ voucher.receipt_to_signature.url }}" data-description="Recipient: {{ voucher.recipient_to_name }}"></td>
+    {% else %}
+    <td class="align-middle"></td>
+    {% endif %}
+    <td class="align-middle">{{ voucher.receipt_from_location | default:'' }}</td>
+    <td class="align-middle">{{ voucher.receipt_to_location | default:'' }}</td>
+    {% if voucher.recipient_from_name %}
+    <td class="align-middle">{{ voucher.adjusted_receipt_from_time }}</td>
+    {% else %}
+    <td></td>
+    {% endif %}
+    {% if voucher.recipient_to_name %}
+    <td class="align-middle">{{ voucher.adjusted_receipt_to_time }}</td>
+    {% else %}
+    <td></td>
+    {% endif %}
+    <td class="align-middle">{{ voucher.notes | default:'' }}</td>
+    <td class="align-middle">
+    <button style="color: white;" class="btn btn-info" data-toggle="modal" data-target="#attachmentsModal" data-id="{{ voucher.id }}">
+        <i class="fas fa-eye"></i> View
+    </button>
+</td>
+  </tr>
+  {% endfor %}
+  {% else %}
+  <tr>
+    <td colspan="14" class="text-center no-data-message" style="position: relative;">
+        <span class="no-data-text">No data available</span>
+    </td>
+</tr>
+  {% endif %}
+  </tbody>
+  {% endif %}
+</table>
+</div>
+<div class="input-group mb-3" style="margin: 30px">
+    <span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">Count of Vehicles</span>
+    <input type="text" class="form-control" style="text-align: center; margin-right: 5%; height: 50px; max-width: 120px;" value="{{number_of_vehicles}}">
+</div>
+<!-- View Image Modal -->
+<div class="modal fade" id="viewImageModal" tabindex="-1" role="dialog" aria-labelledby="viewImageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewImageModalLabel"></h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Stroke Attachment" class="img-fluid">
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Attachments Modal -->
+<div class="modal fade" id="attachmentsModal" tabindex="-1" role="dialog" aria-labelledby="attachmentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="attachmentsModalLabel" style="font-weight: bold; color: red;">Attachments</h2>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                <label style="font-weight: bold; font-size: 30px; color: red; text-align: center; text-decoration: underline;">Received</label>
+                <div id="rattachmentsContent" class="d-flex flex-column align-items-center"></div>
+                </div>
+                <br>
+                <div class="form-group">
+                <label style="font-weight: bold; font-size: 30px; color: red; text-align: center; text-decoration: underline;">Delivered</label>
+                <div id="dattachmentsContent" class="d-flex flex-column align-items-center"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if options == "option1" %}
+<script>
+var radioButton = document.getElementById('inlineRadio1');
+radioButton.checked = true;
+</script>
+{% endif %}
+{% if options == "option2" %}
+<script>
+var radioButton = document.getElementById('inlineRadio2');
+radioButton.checked = true;
+</script>
+{% endif %}
+{% if options == "option3" %}
+<script>
+var radioButton = document.getElementById('inlineRadio3');
+radioButton.checked = true;
+</script>
+{% endif %}
+<!-- Toast container for notifications -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
+      top: 20px;        /* Distance from the top of the viewport */
+      right: 20px;      /* Distance from the right edge of the viewport */
+      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
+      min-width: 300px; /* Optional: Set a minimum width for the toasts */
+  }"></div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Select the submit button
+        const submitButton = document.querySelector('button[type="submit"]');
+        // Get the date input fields and radio buttons
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+        const radioButtons = document.querySelectorAll('input[name="inlineRadioOptions"]');
+        // Add change event listener to date inputs
+        startDateInput.addEventListener('change', function() {
+            submitButton.click();
+        });
+        endDateInput.addEventListener('change', function() {
+            submitButton.click();
+        });
+        // Add change event listener to radio buttons
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', function() {
+                submitButton.click();
+            });
+        });
+    });
+    document.addEventListener('DOMContentLoaded', function() {
+  fetch('/drivers/fetch-pmissions/')
+    .then(response => response.json())
+    .then(data => {
+      const pmissions = data.pmissions;
+      const toastContainer = document.getElementById('toast-container');
+      pmissions.forEach(function(mission) {
+        const toastHTML = `
+          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+              <strong class="mr-auto">${mission.customer_name}</strong>
+            </div>
+            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
+              From: ${mission.from_location}<br>
+              To: ${mission.to_location}<br>
+              Vehicle: ${mission.car_type} (${mission.car_num})
+            </div>
+          </div>
+        `;
+        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+        // Add click event to the toast to mark as read and close the toast
+        const toastElement = document.getElementById(`toast-${mission.id}`);
+        toastElement.addEventListener('click', function() {
+          markAsRead(mission.id);
+          $(toastElement).toast('hide'); // Close the toast after marking as read
+        });
+      });
+
+      // Initialize toast with autohide set to false
+      $('.toast').toast({
+        autohide: false
+      }).toast('show');  // Display all toasts without auto-hiding
+    })
+    .catch(error => {
+      console.error('Error fetching PMissions:', error);
+    });
+
+  // Mark the mission as read when clicked
+  function markAsRead(missionId) {
+    fetch(`/drivers/mark-as-read/${missionId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
+        'Content-Type': 'application/json'
+      },
+    }).then(response => response.json())
+      .then(data => {
+        console.log(`Mission ${missionId} marked as read`);
+      })
+      .catch(error => {
+        console.error('Error marking as read:', error);
+      });
+  }
+
+  // Function to get the CSRF token
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+});
+
+    function setDynamicHeight() {
+        // Get the screen height
+        let screenHeight = window.innerHeight;
+        // Calculate a percentage of the screen height (e.g., 35%)
+        let dynamicHeight = screenHeight * 0.55;
+        // Set the height of the div
+        document.getElementById("itable1").style.height = dynamicHeight + "px";
+    }
+
+    // Set the height on page load
+    window.onload = setDynamicHeight;
+    // Update the height if the window is resized
+    window.onresize = setDynamicHeight;
+    // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
+    const inactivityTime = 300000;
+    // Variable to hold the inactivity timer
+    let inactivityTimer;
+    // Function to reset the timer
+    function resetTimer() {
+        // Clear the existing timer
+        clearTimeout(inactivityTimer);
+        // Set the timer again
+        inactivityTimer = setTimeout(() => {
+            location.reload(); // Refresh the page after the inactivity time
+        }, inactivityTime);
+    }
+    // List of events to listen to for resetting the timer
+    const events = ['mousemove', 'keydown', 'scroll', 'click'];
+    // Add event listeners for each event
+    events.forEach(event => {
+        window.addEventListener(event, resetTimer);
+    });
+    // Initialize the timer when the page loads
+    resetTimer();
+$('#attachmentsModal').on('show.bs.modal', function (event) {
+        var button = $(event.relatedTarget); // Button that triggered the modal
+        var id = button.data('id'); // Extract info from data-* attributes
+        var modal = $(this);
+        var rcontent = modal.find('#rattachmentsContent');
+        var dcontent = modal.find('#dattachmentsContent');
+        // Clear previous content
+        rcontent.html('');
+        dcontent.html('');
+        // Fetch attachments for the voucher
+        $.ajax({
+            url: '{% url "fetch_attachments" %}', // Ensure you have a URL mapping for this view
+            data: {
+                'id': id
+            },
+            success: function (data) {
+                if (data.rattachments.length > 0) {
+                    data.rattachments.forEach(function (rattachment) {
+                        rcontent.append('<img src="' + rattachment.strike_chart_url + '" class="img-fluid" style="margin: 10px 0;">');
+                    });
+                } else {
+                    rcontent.append('<p>No attachments available.</p>');
+                }
+                if (data.dattachments.length > 0) {
+                    data.dattachments.forEach(function (dattachment) {
+                        dcontent.append('<img src="' + dattachment.strike_chart_url + '" class="img-fluid" style="margin: 10px 0;">');
+                    });
+                } else {
+                    dcontent.append('<p>No attachments available.</p>');
+                }
+            }
+        });
+    });
+$('#viewImageModal').on('show.bs.modal', function (event) {
+        var button = $(event.relatedTarget);
+        var src = button.data('src');
+        var description = button.data('description');
+        var modal = $(this);
+        modal.find('#modalImage').attr('src', src);
+        modal.find('.modal-title').text(description);
+    });
+</script>
+</body>
+{% if result != "ok" %}
+<script>
+    // Get today's date
+    var today = new Date();
+    // Format today's date as YYYY-MM-DD
+    var formattedToday = today.toISOString().split('T')[0];
+    // Set the end date to today
+    document.getElementById('end_date').value = formattedToday;
+    document.getElementById('end_date').max = formattedToday;
+    // Calculate the date for one week ago
+    var oneWeekAgo = new Date();
+    oneWeekAgo.setDate(today.getDate() - 6);
+    // Format the date for one week ago as YYYY-MM-DD
+    var formattedOneWeekAgo = oneWeekAgo.toISOString().split('T')[0];
+    // Set the start date to one week ago
+    document.getElementById('start_date').value = formattedOneWeekAgo;
+</script>
+{% endif %}
+{% else %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css?family=Raleway:400,700');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Raleway, sans-serif;
+}
+
+body {
+  /* Set the background image */
+    background-image: url('/static/image/bc.jpg');
+    /* Adjust background properties as needed */
+    background-size: cover;
+    background-position: center;
+}
+
+.ucontainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.screen {
+  background: linear-gradient(90deg, #5D54A4, #7C78B8);
+  position: relative;
+  height: 600px;
+  width: 360px;
+  box-shadow: 0px 0px 24px #5C5696;
+}
+
+.screen__content {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+}
+
+.screen__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  -webkit-clip-path: inset(0 0 0 0);
+  clip-path: inset(0 0 0 0);
+}
+
+.screen__background__shape {
+  transform: rotate(45deg);
+  position: absolute;
+}
+
+.screen__background__shape1 {
+  height: 520px;
+  width: 520px;
+  background: #FFF;
+  top: -50px;
+  right: 120px;
+  border-radius: 0 72px 0 0;
+}
+
+.screen__background__shape2 {
+  height: 220px;
+  width: 220px;
+  background: #6C63AC;
+  top: -172px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape3 {
+  height: 540px;
+  width: 190px;
+  background: linear-gradient(270deg, #5D54A4, #6A679E);
+  top: -24px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape4 {
+  height: 400px;
+  width: 200px;
+  background: #7E7BB9;
+  top: 420px;
+  right: 50px;
+  border-radius: 60px;
+}
+
+.login {
+  width: 320px;
+  padding: 30px;
+  padding-top: 156px;
+}
+
+.login__field {
+  padding: 20px 0px;
+  position: relative;
+}
+
+.login__icon {
+  position: absolute;
+  top: 30px;
+  color: #7875B5;
+}
+
+.login__input {
+  border: none;
+  border-bottom: 2px solid #D1D1D4;
+  background: none;
+  padding: 10px;
+  padding-left: 24px;
+  font-weight: 700;
+  width: 75%;
+  transition: .2s;
+}
+
+.login__input:active,
+.login__input:focus,
+.login__input:hover {
+  outline: none;
+  border-bottom-color: #6A679E;
+}
+
+.login__submit {
+  background: #fff;
+  font-size: 14px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  border-radius: 26px;
+  border: 1px solid #D4D3E8;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #4C489D;
+  box-shadow: 0px 2px 2px #5C5696;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.login__submit:active,
+.login__submit:focus,
+.login__submit:hover {
+  border-color: #6A679E;
+  outline: none;
+}
+
+.button__icon {
+  font-size: 24px;
+  margin-left: auto;
+  color: #7875B5;
+}
+
+.social-login {
+  position: absolute;
+  height: 140px;
+  width: 160px;
+  text-align: center;
+  bottom: 0px;
+  right: 0px;
+  color: #fff;
+}
+
+.social-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-login__icon {
+  padding: 20px 10px;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0px 0px 8px #7875B5;
+}
+
+.social-login__icon:hover {
+  transform: scale(1.5);
+}
+</style>
+<div class="ucontainer">
+  <div class="screen">
+    <div class="screen__content">
+      <form class="login" method="POST" autocomplete="off" action="{% url 'recipt_vouchers_index' %}">
+          {% csrf_token %}
+        <div class="login__field">
+          <i class="login__icon fas fa-user"></i>
+          <input type="text" id="username" name = "username" class="login__input" placeholder="User name">
+        </div>
+        <div class="login__field">
+          <i class="login__icon fas fa-lock"></i>
+          <input type="password" id="password" name="password" class="login__input" placeholder="Password">
+        </div>
+        <button class="button login__submit">
+          <span class="button__text">Log In Now</span>
+          <i class="button__icon fas fa-chevron-right"></i>
+        </button>
+      </form>
+      <div class="social-login">
+        <h3>log in via</h3>
+        <div class="social-icons">
+          <a href="#" class="social-login__icon fab fa-instagram"></a>
+          <a href="#" class="social-login__icon fab fa-facebook"></a>
+          <a href="#" class="social-login__icon fab fa-twitter"></a>
+        </div>
+      </div>
+    </div>
+    <div class="screen__background">
+      <span class="screen__background__shape screen__background__shape4"></span>
+      <span class="screen__background__shape screen__background__shape3"></span>
+      <span class="screen__background__shape screen__background__shape2"></span>
+      <span class="screen__background__shape screen__background__shape1"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

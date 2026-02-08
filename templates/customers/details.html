@@ -1,0 +1,580 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+{% if user.is_authenticated %}
+<head>
+	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <style>
+        body{margin-top:0;
+background-color: #f7f7fc;
+}
+
+.timeline {
+    list-style-type: none;
+    position: relative
+}
+
+.timeline:before {
+    background: #dee2e6;
+    left: 9px;
+    width: 2px;
+    height: 100%
+}
+
+.timeline-item:before,
+.timeline:before {
+    content: " ";
+    display: inline-block;
+    position: absolute;
+    z-index: 1
+}
+
+.timeline-item:before {
+    background: #fff;
+    border-radius: 50%;
+    border: 3px solid #3b7ddd;
+    left: 0;
+    width: 20px;
+    height: 20px
+}
+.card {
+    margin-bottom: 24px;
+    box-shadow: 0 0 0.875rem 0 rgba(33,37,41,.05);
+}
+.card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    word-wrap: break-word;
+    background-color: #fff;
+    background-clip: initial;
+    border: 0 solid transparent;
+    border-radius: .25rem;
+}
+.card-body {
+    flex: 1 1 auto;
+    padding: 1.25rem;
+}
+.card-header:first-child {
+    border-radius: .25rem .25rem 0 0;
+}
+.card-header {
+    border-bottom-width: 1px;
+}
+.pb-0 {
+    padding-bottom: 0!important;
+}
+.card-header {
+    padding: 1rem 1.25rem;
+    margin-bottom: 0;
+    background-color: #fff;
+    border-bottom: 0 solid transparent;
+}
+</style>
+</head>
+<body>
+<div class="card" style="margin-top: 0; border-top: none;">
+    <div class="card-body" style="padding: 5px;">
+    <div class="container mb-2 mt-0">
+        <div class="row d-flex align-items-center">
+            <div class="col-xl-12 text-end">
+                <a href="{% url 'customers_index' %}" class="btn btn-light text-capitalize border-0" data-mdb-ripple-init data-mdb-ripple-color="dark">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
+        </div>
+        </div>
+        </div>
+        </div>
+<div class="container">
+    <div class="container-fluid p-0">
+		<div class="row" style="margin-top: 30px;">
+			<div class="col-xl-8">
+				<div class="card">
+                    <div class="input-group mb-3" style="padding: 10px 20px 0 20px;">
+            <h5 class="card-title mb-0">Customer Attachments</h5>
+            {% if user.is_staff %}
+            <button style="height: 40px; position: absolute; right: 20px;" type="button" data-toggle="modal" data-target="#addModal" class="btn btn-primary"><i class="fas fa-plus"></i> Add New Attachment</button>
+            {% endif %}
+                    </div>
+					<div class="card-body">
+						<table class="table table-striped" style="width:100%">
+							<thead>
+								<tr>
+									<th>Description</th>
+									<th>Attachment</th>
+                                    {% if user.is_staff %}
+									<th>Actions</th>
+                                    {% endif %}
+								</tr>
+							</thead>
+							<tbody>
+								{% for paper in papers %}
+							  <tr>
+								<td class="align-middle">{{ paper.description }}</td>
+							    <td class="align-middle"><a href="{{ paper.paper.url }}" target="_blank">Download</a></td>
+								{% if user.is_staff %}
+                                  <td>
+								  <button style="width: 70px; height: 36px;" class="btn btn-sm btn-primary edit-button" data-toggle="modal" data-target="#editModal" data-id="{{ paper.id }}" data-name="{{ paper.name }}" data-description="{{ paper.description }}">Edit</button>
+                                  <button style="width: 70px; height: 36px;" class="btn btn-sm btn-danger delete-button" data-toggle="modal" data-target="#deleteModal" data-id="{{ paper.id }}" data-name="{{ paper.name }}">Delete</button>
+								</td>
+                                  {% endif %}
+							  </tr>
+							  {% endfor %}
+							</tbody>
+						</table>
+					</div>
+            </div>
+            <div class="card">
+            <div class="input-group mb-3" style="padding: 10px 20px 0 20px;">
+            <h5 class="card-title mb-0">Customer Vehicles</h5>
+            </div>
+                <div class="card-body">
+                    <table class="table table-striped" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Vehicle Type</th>
+                                <th>Vehicle Number</th>
+                                <th>Vehicle Brand</th>
+                                <th>Vehicle Color</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for voucher in vouchers %}
+                          <tr>
+                            <td class="align-middle">{{ voucher.car_type }}</td>
+                            <td class="align-middle">{{ voucher.car_num }}</td>
+                            <td class="align-middle">{{ voucher.car_mark }}</td>
+                            <td class="align-middle">{{ voucher.car_color }}</td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+				</div>
+			</div>
+			<div class="col-xl-4">
+				<div class="card">
+					<div class="card-header">
+						<h5 class="card-title mb-0">{{ customer.name }}</h5>
+					</div>
+					<div class="card-body">
+						<div class="row g-0">
+							<div class="col-sm-3 col-xl-12 col-xxl-3 text-center">
+                                {% if customer.logo %}
+								<img src="{{ customer.logo.url }}" width="64" height="64" class="rounded-circle mt-2"/>
+                                {% endif %}
+							</div>
+							<div class="col-sm-9 col-xl-12 col-xxl-9">
+								<strong>About me</strong>
+								<p>A Customer for Al-Roaya Company</p>
+							</div>
+						</div>
+
+						<table class="table table-sm mt-2 mb-4">
+							<tbody>
+								<tr>
+									<th>Name</th>
+									<td>{{customer.name}}</td>
+								</tr>
+								<tr>
+									<th>Email</th>
+									<td>{{customer.mail}}</td>
+								</tr>
+								<tr>
+									<th>Phone</th>
+									<td>{{customer.phone}}</td>
+								</tr>
+								<tr>
+									<th>Payment System</th>
+									<td>{{customer.payment}}</td>
+								</tr>
+							    <tr>
+									<th>Created at</th>
+									<td>{{customer.created_at}}</td>
+								</tr>
+							</tbody>
+						</table>
+						<strong>Activity</strong>
+						<ul class="timeline mt-2 mb-0">
+							{% for combined_entry in combined_entries %}
+							<li class="timeline-item">
+								<strong>{{combined_entry.account}} #{{combined_entry.number_annotated}}</strong>
+								<span class="float-right text-muted text-sm">{{combined_entry.created_at_annotated}}</span>
+								<p>Total Value: {{combined_entry.amount_annotated}}</p>
+							</li>
+							{% endfor %}
+						</ul>
+					</div>
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div>
+<!-- Modal -->
+        <div class="modal fade" id="addModal" tabindex="-1" role="dialog" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addCustomerModalLabel">Add New Attachment</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="background-color: whitesmoke;">
+                        <form action="{% url 'add_attachment' %}" method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <input type="hidden" class="form-control" id="customer_name" name="customer_id" value="{{customer.id}}">
+
+                            <div class="form-group">
+                                <label style="color: darkblue; font-weight: bold;" for="description">Description</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="description" name="description" required>
+                            </div>
+                            <br>
+                            <div class="form-group">
+                                <label style="color: darkblue; font-weight: bold;" for="attachment">Attachment</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="file" class="form-control-file" id="attachment" name="attachment" required>
+                            </div>
+                            <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" style="background-color: yellowgreen; width: 60px; height: 37px; border-radius: 5px; border-color: yellowgreen; color: white;">Add</button>
+                    </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Edit Modal -->
+        <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editAttachmentModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editCustomerModalLabel">Edit Attachment</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form method="post" action="{% url 'edit_attachment' 0 %}" enctype="multipart/form-data" id="editForm">
+                            {% csrf_token %}
+                            <input type="hidden" name="edit-id" id="edit-id">
+							<input type="hidden" name="name" id="edit-name">
+                            <div class="form-group">
+                                <label for="edit-description">Description</label>
+                                <input type="text" class="form-control" id="edit-description" name="description" required>
+                            </div>
+                            <br>
+                            <div class="form-group">
+                                <label for="edit-paper">Attachment</label>
+                                <input type="file" class="form-control-file" id="edit-paper" name="paper">
+                            </div>
+                            <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save changes</button>
+                    </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form action="{% url 'delete_attachment' 0 %}" method="post" id="deleteForm">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete the attachment?</p>
+                        <input type="hidden" id="delete-id" name="id">
+                        <input type="hidden" name="name" id="delete-name">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+<!-- View Image Modal -->
+        <div class="modal fade" id="viewImageModal" tabindex="-1" role="dialog" aria-labelledby="viewImageModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="viewImageModalLabel"></h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <img id="modalImage" src="" alt="Paper Attachment" class="img-fluid">
+                    </div>
+                </div>
+            </div>
+        </div>
+<script>
+	$('#viewImageModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget);
+            var src = button.data('src');
+			var description = button.data('description');
+            var modal = $(this);
+            modal.find('#modalImage').attr('src', src);
+			modal.find('.modal-title').text(description);
+        });
+	$(document).on('click', '.edit-button', function() {
+    var id = $(this).data('id');
+	var name = $(this).data('name');
+    var description = $(this).data('description');
+    $('#edit-id').val(id);
+	$('#edit-name').val(name);
+    $('#edit-description').val(description);
+    var action = $('#editForm').attr('action').replace('0', id);
+    $('#editForm').attr('action', action);
+    });
+	$(document).on('click', '.delete-button', function() {
+            var id = $(this).data('id');
+            var name = $(this).data('name');
+            $('#delete-id').val(id);
+            $('#delete-name').val(name);
+            var action = $('#deleteForm').attr('action').replace('0', id);
+            $('#deleteForm').attr('action', action);
+        });
+</script>
+</body>
+{% else %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css?family=Raleway:400,700');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Raleway, sans-serif;
+}
+
+body {
+  /* Set the background image */
+    background-image: url('/static/image/bc.jpg');
+    /* Adjust background properties as needed */
+    background-size: cover;
+    background-position: center;
+}
+
+.ucontainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.screen {
+  background: linear-gradient(90deg, #5D54A4, #7C78B8);
+  position: relative;
+  height: 600px;
+  width: 360px;
+  box-shadow: 0px 0px 24px #5C5696;
+}
+
+.screen__content {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+}
+
+.screen__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  -webkit-clip-path: inset(0 0 0 0);
+  clip-path: inset(0 0 0 0);
+}
+
+.screen__background__shape {
+  transform: rotate(45deg);
+  position: absolute;
+}
+
+.screen__background__shape1 {
+  height: 520px;
+  width: 520px;
+  background: #FFF;
+  top: -50px;
+  right: 120px;
+  border-radius: 0 72px 0 0;
+}
+
+.screen__background__shape2 {
+  height: 220px;
+  width: 220px;
+  background: #6C63AC;
+  top: -172px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape3 {
+  height: 540px;
+  width: 190px;
+  background: linear-gradient(270deg, #5D54A4, #6A679E);
+  top: -24px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape4 {
+  height: 400px;
+  width: 200px;
+  background: #7E7BB9;
+  top: 420px;
+  right: 50px;
+  border-radius: 60px;
+}
+
+.login {
+  width: 320px;
+  padding: 30px;
+  padding-top: 156px;
+}
+
+.login__field {
+  padding: 20px 0px;
+  position: relative;
+}
+
+.login__icon {
+  position: absolute;
+  top: 30px;
+  color: #7875B5;
+}
+
+.login__input {
+  border: none;
+  border-bottom: 2px solid #D1D1D4;
+  background: none;
+  padding: 10px;
+  padding-left: 24px;
+  font-weight: 700;
+  width: 75%;
+  transition: .2s;
+}
+
+.login__input:active,
+.login__input:focus,
+.login__input:hover {
+  outline: none;
+  border-bottom-color: #6A679E;
+}
+
+.login__submit {
+  background: #fff;
+  font-size: 14px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  border-radius: 26px;
+  border: 1px solid #D4D3E8;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #4C489D;
+  box-shadow: 0px 2px 2px #5C5696;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.login__submit:active,
+.login__submit:focus,
+.login__submit:hover {
+  border-color: #6A679E;
+  outline: none;
+}
+
+.button__icon {
+  font-size: 24px;
+  margin-left: auto;
+  color: #7875B5;
+}
+
+.social-login {
+  position: absolute;
+  height: 140px;
+  width: 160px;
+  text-align: center;
+  bottom: 0px;
+  right: 0px;
+  color: #fff;
+}
+
+.social-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-login__icon {
+  padding: 20px 10px;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0px 0px 8px #7875B5;
+}
+
+.social-login__icon:hover {
+  transform: scale(1.5);
+}
+</style>
+<div class="ucontainer">
+  <div class="screen">
+    <div class="screen__content">
+      <form class="login" method="POST" autocomplete="off" action="{% url 'customers_index' %}">
+          {% csrf_token %}
+        <div class="login__field">
+          <i class="login__icon fas fa-user"></i>
+          <input type="text" id="username" name = "username" class="login__input" placeholder="User name">
+        </div>
+        <div class="login__field">
+          <i class="login__icon fas fa-lock"></i>
+          <input type="password" id="password" name="password" class="login__input" placeholder="Password">
+        </div>
+        <button class="button login__submit">
+          <span class="button__text">Log In Now</span>
+          <i class="button__icon fas fa-chevron-right"></i>
+        </button>
+      </form>
+      <div class="social-login">
+        <h3>log in via</h3>
+        <div class="social-icons">
+          <a href="#" class="social-login__icon fab fa-instagram"></a>
+          <a href="#" class="social-login__icon fab fa-facebook"></a>
+          <a href="#" class="social-login__icon fab fa-twitter"></a>
+        </div>
+      </div>
+    </div>
+    <div class="screen__background">
+      <span class="screen__background__shape screen__background__shape4"></span>
+      <span class="screen__background__shape screen__background__shape3"></span>
+      <span class="screen__background__shape screen__background__shape2"></span>
+      <span class="screen__background__shape screen__background__shape1"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

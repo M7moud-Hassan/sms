@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+{% if user.is_authenticated %}
+<head>
+    <meta name="description" content="Vali is a responsive and free admin theme built with Bootstrap 5, SASS and PUG.js. It's fully customizable and modular.">
+    <!-- Twitter meta-->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:site" content="@pratikborsadiya">
+    <meta property="twitter:creator" content="@pratikborsadiya">
+    <!-- Open Graph Meta-->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Vali Admin">
+    <meta property="og:title" content="Vali - Free Bootstrap 5 admin theme">
+    <meta property="og:url" content="http://pratikborsadiya.in/blog/vali-admin">
+    <meta property="og:image" content="http://pratikborsadiya.in/blog/vali-admin/hero-social.png">
+    <meta property="og:description" content="Vali is a responsive and free admin theme built with Bootstrap 5, SASS and PUG.js. It's fully customizable and modular.">
+    <title>Vali Admin - Free Bootstrap 5 Admin Template</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Main CSS-->
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+    <!-- Font-icon css-->
+  </head>
+  <body>
+    <main class="app-content">
+      <div class="app-title">
+        <div>
+          <h1><i class="bi bi-speedometer"></i> Dashboard</h1>
+          <p>The Company Reports About its Earnings, Costs, and Balances</p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 col-lg-3">
+          <div class="widget-small primary coloured-icon"><i class="icon bi bi-person-lines-fill fs-1"></i>
+            <div class="info">
+              <h4>Drivers Balances</h4>
+              <p><b>{{ drivers_balance }}</b></p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+          <div class="widget-small info coloured-icon"><i class="icon bi bi-person-check fs-1"></i>
+            <div class="info">
+              <h4>Customers Balances</h4>
+              <p><b>{{ customers_balance }}</b></p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+          <div class="widget-small warning coloured-icon"><i class="icon bi-piggy-bank fs-1"></i>
+            <div class="info">
+              <h4>Earnings Last Year</h4>
+              <p><b>{{ year_earning }}</b></p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+          <div class="widget-small danger coloured-icon"><i class="icon bi-piggy-bank fs-1"></i>
+            <div class="info">
+              <h4>Earnings Last Month</h4>
+              <p><b>{{ month_earning }}</b></p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6">
+          <div class="tile">
+            <h3 class="tile-title">Company Earnings and Costs Last 6 Months</h3>
+            <div class="ratio ratio-16x9">
+              <div id="salesChart"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="tile">
+            <h3 class="tile-title">Count of Transported Cars vs Motorcycles Last 12 Months</h3>
+            <div class="ratio ratio-16x9">
+              <div id="supportRequestChart"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Toast container for notifications -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
+      top: 20px;        /* Distance from the top of the viewport */
+      right: 20px;      /* Distance from the right edge of the viewport */
+      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
+      min-width: 300px; /* Optional: Set a minimum width for the toasts */
+  }"></div>
+    </main>
+    <!-- Essential javascripts for application to work-->
+    <script src="{% static 'js/jquery-3.7.0.min.js' %}"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script>
+    <script src="{% static 'js/main.js' %}"></script>
+    <!-- Page specific javascripts-->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script type="text/javascript">
+  document.addEventListener('DOMContentLoaded', function() {
+  fetch('/drivers/fetch-pmissions/')
+    .then(response => response.json())
+    .then(data => {
+      const pmissions = data.pmissions;
+      const toastContainer = document.getElementById('toast-container');
+      pmissions.forEach(function(mission) {
+        const toastHTML = `
+          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+              <strong class="mr-auto">${mission.customer_name}</strong>
+            </div>
+            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
+              From: ${mission.from_location}<br>
+              To: ${mission.to_location}<br>
+              Vehicle: ${mission.car_type} (${mission.car_num})
+            </div>
+          </div>
+        `;
+        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+        // Add click event to the toast to mark as read and close the toast
+        const toastElement = document.getElementById(`toast-${mission.id}`);
+        toastElement.addEventListener('click', function() {
+          markAsRead(mission.id);
+          $(toastElement).toast('hide'); // Close the toast after marking as read
+        });
+      });
+
+      // Initialize toast with autohide set to false
+      $('.toast').toast({
+        autohide: false
+      }).toast('show');  // Display all toasts without auto-hiding
+    })
+    .catch(error => {
+      console.error('Error fetching PMissions:', error);
+    });
+
+  // Mark the mission as read when clicked
+  function markAsRead(missionId) {
+    fetch(`/drivers/mark-as-read/${missionId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
+        'Content-Type': 'application/json'
+      },
+    }).then(response => response.json())
+      .then(data => {
+        console.log(`Mission ${missionId} marked as read`);
+      })
+      .catch(error => {
+        console.error('Error marking as read:', error);
+      });
+  }
+
+  // Function to get the CSRF token
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+});
+
+      // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
+        const inactivityTime = 300000;
+        // Variable to hold the inactivity timer
+        let inactivityTimer;
+        // Function to reset the timer
+        function resetTimer() {
+            // Clear the existing timer
+            clearTimeout(inactivityTimer);
+            // Set the timer again
+            inactivityTimer = setTimeout(() => {
+                location.reload(); // Refresh the page after the inactivity time
+            }, inactivityTime);
+        }
+        // List of events to listen to for resetting the timer
+        const events = ['mousemove', 'keydown', 'scroll', 'click'];
+        // Add event listeners for each event
+        events.forEach(event => {
+            window.addEventListener(event, resetTimer);
+        });
+        // Initialize the timer when the page loads
+        resetTimer();
+
+      const car_count = {{ car_vouchers|safe }};
+      const cycle_count = {{ cycle_vouchers|safe }};
+      const months = {{ months|safe }};  // Data from Django
+      const incomeData = {{ income_data|safe }};
+      const costsData = {{ costs_data|safe }};
+
+    const salesData = {
+        xAxis: {
+            type: 'category',
+            data: months
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: {
+                formatter: 'JD {value}'  // Jordanian Dinar symbol (or any currency)
+            }
+        },
+        series: [
+            {
+                name: 'Income',
+                data: incomeData,
+                type: 'line',
+                smooth: true,
+                lineStyle: { color: 'green' }
+            },
+            {
+                name: 'Costs',
+                data: costsData,
+                type: 'line',
+                smooth: true,
+                lineStyle: { color: 'red' }
+            }
+        ],
+        tooltip: {
+            trigger: 'axis',
+            formatter: function (params) {
+                const result = params.map(function (param) {
+                    return `<b>${param.seriesName}:</b> JD ${param.value}`;
+                });
+                return result.join('<br>');
+            }
+        },
+        legend: {
+            data: ['Income', 'Costs']
+        }
+    };
+
+
+      
+      const supportRequests = {
+      	tooltip: {
+      		trigger: 'item'
+      	},
+      	legend: {
+      		orient: 'vertical',
+      		left: 'left'
+      	},
+      	series: [
+      		{
+      			name: 'Count of Vehicles',
+      			type: 'pie',
+      			radius: '50%',
+      			data: [
+      				{ value: car_count, name: 'Cars' },
+      				{ value: cycle_count, name: 'Motorcycles' },
+      			],
+      			emphasis: {
+      				itemStyle: {
+      					shadowBlur: 10,
+      					shadowOffsetX: 0,
+      					shadowColor: 'rgba(0, 0, 0, 0.5)'
+      				}
+      			}
+      		}
+      	]
+      };
+      
+      const salesChartElement = document.getElementById('salesChart');
+      const salesChart = echarts.init(salesChartElement, null, { renderer: 'svg' });
+      salesChart.setOption(salesData);
+      new ResizeObserver(() => salesChart.resize()).observe(salesChartElement);
+      
+      const supportChartElement = document.getElementById("supportRequestChart")
+      const supportChart = echarts.init(supportChartElement, null, { renderer: 'svg' });
+      supportChart.setOption(supportRequests);
+      new ResizeObserver(() => supportChart.resize()).observe(supportChartElement);
+    </script>
+    <!-- Google analytics script-->
+    <script type="text/javascript">
+      if(document.location.hostname == 'pratikborsadiya.in') {
+      	(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      	(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      	m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      	})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+      	ga('create', 'UA-72504830-1', 'auto');
+      	ga('send', 'pageview');
+      }
+    </script>
+  </body>
+{% else %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css?family=Raleway:400,700');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Raleway, sans-serif;
+}
+
+body {
+  /* Set the background image */
+    background-image: url('/static/image/bc.jpg');
+    /* Adjust background properties as needed */
+    background-size: cover;
+    background-position: center;
+}
+
+.ucontainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.screen {
+  background: linear-gradient(90deg, #5D54A4, #7C78B8);
+  position: relative;
+  height: 600px;
+  width: 360px;
+  box-shadow: 0px 0px 24px #5C5696;
+}
+
+.screen__content {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+}
+
+.screen__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  -webkit-clip-path: inset(0 0 0 0);
+  clip-path: inset(0 0 0 0);
+}
+
+.screen__background__shape {
+  transform: rotate(45deg);
+  position: absolute;
+}
+
+.screen__background__shape1 {
+  height: 520px;
+  width: 520px;
+  background: #FFF;
+  top: -50px;
+  right: 120px;
+  border-radius: 0 72px 0 0;
+}
+
+.screen__background__shape2 {
+  height: 220px;
+  width: 220px;
+  background: #6C63AC;
+  top: -172px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape3 {
+  height: 540px;
+  width: 190px;
+  background: linear-gradient(270deg, #5D54A4, #6A679E);
+  top: -24px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape4 {
+  height: 400px;
+  width: 200px;
+  background: #7E7BB9;
+  top: 420px;
+  right: 50px;
+  border-radius: 60px;
+}
+
+.login {
+  width: 320px;
+  padding: 30px;
+  padding-top: 156px;
+}
+
+.login__field {
+  padding: 20px 0px;
+  position: relative;
+}
+
+.login__icon {
+  position: absolute;
+  top: 30px;
+  color: #7875B5;
+}
+
+.login__input {
+  border: none;
+  border-bottom: 2px solid #D1D1D4;
+  background: none;
+  padding: 10px;
+  padding-left: 24px;
+  font-weight: 700;
+  width: 75%;
+  transition: .2s;
+}
+
+.login__input:active,
+.login__input:focus,
+.login__input:hover {
+  outline: none;
+  border-bottom-color: #6A679E;
+}
+
+.login__submit {
+  background: #fff;
+  font-size: 14px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  border-radius: 26px;
+  border: 1px solid #D4D3E8;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #4C489D;
+  box-shadow: 0px 2px 2px #5C5696;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.login__submit:active,
+.login__submit:focus,
+.login__submit:hover {
+  border-color: #6A679E;
+  outline: none;
+}
+
+.button__icon {
+  font-size: 24px;
+  margin-left: auto;
+  color: #7875B5;
+}
+
+.social-login {
+  position: absolute;
+  height: 140px;
+  width: 160px;
+  text-align: center;
+  bottom: 0px;
+  right: 0px;
+  color: #fff;
+}
+
+.social-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-login__icon {
+  padding: 20px 10px;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0px 0px 8px #7875B5;
+}
+
+.social-login__icon:hover {
+  transform: scale(1.5);
+}
+</style>
+<div class="ucontainer">
+  <div class="screen">
+    <div class="screen__content">
+      <form class="login" method="POST" autocomplete="off" action="{% url 'balances_index' %}">
+          {% csrf_token %}
+        <div class="login__field">
+          <i class="login__icon fas fa-user"></i>
+          <input type="text" id="username" name = "username" class="login__input" placeholder="User name">
+        </div>
+        <div class="login__field">
+          <i class="login__icon fas fa-lock"></i>
+          <input type="password" id="password" name="password" class="login__input" placeholder="Password">
+        </div>
+        <button class="button login__submit">
+          <span class="button__text">Log In Now</span>
+          <i class="button__icon fas fa-chevron-right"></i>
+        </button>
+      </form>
+      <div class="social-login">
+        <h3>log in via</h3>
+        <div class="social-icons">
+          <a href="#" class="social-login__icon fab fa-instagram"></a>
+          <a href="#" class="social-login__icon fab fa-facebook"></a>
+          <a href="#" class="social-login__icon fab fa-twitter"></a>
+        </div>
+      </div>
+    </div>
+    <div class="screen__background">
+      <span class="screen__background__shape screen__background__shape4"></span>
+      <span class="screen__background__shape screen__background__shape3"></span>
+      <span class="screen__background__shape screen__background__shape2"></span>
+      <span class="screen__background__shape screen__background__shape1"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+</html>

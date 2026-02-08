@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+{% if user.is_authenticated %}
+<head>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</head>
+<body>
+<div class="input-group mb-3" style="margin: 30px">
+    {% if user.is_staff %}
+    <button style="height: 50px; border-radius: 0; margin-right: 20px; margin-top: 35px;" type="button" data-toggle="modal" data-target="#addModal" class="btn btn-primary add-button"><i class="fas fa-plus"></i> Add New Mission</button>
+    {% else %}
+    <div style="height: 50px; border-radius: 0; margin-right: 20px; margin-top: 35px;"></div>
+    {% endif %}
+</div>
+<div style="margin: 30px;">
+    <table class="table table-striped table-borderless">
+  <thead>
+    <tr>
+      <th>Department</th>
+      <th>Employee Name</th>
+      <th>Navigation Date</th>
+      <th>Receiving Location</th>
+      <th>Delivery location</th>
+      <th>Vehicle Type</th>
+      <th>Vehicle Brand</th>
+      <th>Vehicle Number</th>
+      <th>Vehicle Color</th>
+      <th>Additional Notes</th>
+      <th>Created at</th>
+      <th>Assign Mission</th> <!-- New column header -->
+    </tr>
+  </thead>
+  <tbody>
+  {% if pmissions %}
+  {% for pmission in pmissions %}
+  <tr>
+    <td class="align-middle">{{ pmission.customer.name }}</td>
+    <td class="align-middle">{{ pmission.employee }}</td>
+    <td class="align-middle">{{ pmission.date }}</td>
+    <td class="align-middle">{{ pmission.from_location }}</td>
+    <td class="align-middle">{{ pmission.to_location }}</td>
+    <td class="align-middle">{{ pmission.car_type }}</td>
+    <td class="align-middle">{{ pmission.car_mark }}</td>
+    <td class="align-middle">{{ pmission.car_num }}</td>
+    <td class="align-middle">{{ pmission.car_color }}</td>
+    <td class="align-middle">{{ pmission.notes }}</td>
+    <td class="align-middle">{{ pmission.adjusted_created_at }}</td>
+  <td class="align-middle">
+    <select style="width: 150px;" class="assign-mmission form-control" data-pmission-id="{{ pmission.id }}">
+        <option value="">-- Select --</option>
+        {% for mmission in pmission.mmission_options %}
+            <option value="{{ mmission.id }}"
+                {% if pmission.mmission and pmission.mmission.id == mmission.id %}
+                    selected
+                {% endif %}
+            >
+                {{ mmission.description }}
+            </option>
+        {% endfor %}
+        <option value="other"
+            {% if pmission.another_notes %}
+                selected
+            {% endif %}
+        >
+            {% if pmission.another_notes %}
+                {{ pmission.another_notes }}
+            {% else %}
+                Other
+            {% endif %}
+        </option>
+    </select>
+</td>
+    </tr>
+    {% endfor %}
+  {% else %}
+  <tr>
+    <td colspan="12" class="text-center no-data-message" style="position: relative;">
+        <span class="no-data-text">No data available</span>
+    </td>
+</tr>
+  {% endif %}
+  </tbody>
+    </table>
+</div>
+<!-- Add Modal -->
+        <div class="modal fade" id="addModal" tabindex="-1" role="dialog" aria-labelledby="addMissionModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addMissionModalLabel">Add New Mission</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="background-color: whitesmoke;">
+                        <form action="{% url 'add_new_mission' %}" method="post" enctype="multipart/form-data" id="addForm">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="add-driver">Driver Name</label>
+                            <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="add-driver" name="driver" required>
+                                {% for driver in drivers %}
+                                <option>{{ driver.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="add-customer_name">Customer Name</label>
+                            <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="add-customer_name" name="name" required>
+                                {% for customer in customers %}
+                                <option>{{ customer.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="add-transportation_date">Transportation Date</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="add-transportation_date" name="date" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                        <div class="input-group mb-3" style="margin: 0">
+                            <div style="width: 49.75%;">
+                                <label style="color: darkblue; font-weight: bold;" for="add-receiving_location">Receiving Location</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;"
+                                       type="text" class="form-control" autocomplete="off"
+                                       id="add-receiving_location" name="receiving_location"
+                                       list="receiving_location_list" required>
+
+                                <datalist id="receiving_location_list"></datalist>
+                            </div>
+                            <div style="width: 49.75%; margin-left: 0.5%;">
+                                <label style="color: darkblue; font-weight: bold;" for="add-delivery_location">Delivery Location</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;"
+                                   type="text" class="form-control" autocomplete="off"
+                                   id="add-delivery_location" name="delivery_location"
+                                   list="delivery_location_list" required>
+
+                            <datalist id="delivery_location_list"></datalist>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="add-estimated_cost">Estimated Cost</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="number" class="form-control" id="add-estimated_cost" name="cost" min="0.0" value="0.0" required>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="add-notes">Notes</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="add-notes" name="notes">
+                        </div>
+                        <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" style="background-color: yellowgreen; width: 60px; height: 37px; border-radius: 5px; border-color: yellowgreen; color: white;">Add</button>
+                    </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Bootstrap Modal -->
+<div class="modal fade" id="otherNotesModal" tabindex="-1" role="dialog" aria-labelledby="otherNotesModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="otherNotesModalLabel">Enter Other Notes</h5>
+            </div>
+            <div class="modal-body" style="background-color: whitesmoke;">
+                <input type="text" id="otherNotesInput" class="form-control" autocomplete="off" placeholder="Enter notes" required>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="saveOtherNotes" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+    const customerSelect = document.getElementById('add-customer_name');
+    const dateInput = document.getElementById('add-transportation_date');
+    const receivingLocationInput = document.getElementById('add-receiving_location');
+    const deliveryLocationInput = document.getElementById('add-delivery_location');
+
+    // Fetch suggestions whenever the modal is opened, customer changes, or date changes
+    const fetchSuggestions = () => {
+        const customerName = customerSelect.options[customerSelect.selectedIndex].value;
+        const date = dateInput.value;
+
+        if (!customerName || !date) return;
+
+        // Adjusted the URL parameter to use customer_name instead of customer_id
+        fetch(`{% url 'get_location_suggestions' %}?customer_name=${encodeURIComponent(customerName)}&date=${date}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error(data.error);
+                    return;
+                }
+                updateSuggestions(receivingLocationInput, data.from_locations);
+                updateSuggestions(deliveryLocationInput, data.to_locations);
+            })
+            .catch(error => console.error('Error fetching location suggestions:', error));
+    };
+
+    const updateSuggestions = (inputElement, suggestions) => {
+        const datalistId = inputElement.getAttribute('list');
+        let datalist = document.getElementById(datalistId);
+
+        if (!datalist) {
+            datalist = document.createElement('datalist');
+            datalist.id = datalistId;
+            document.body.appendChild(datalist);
+        }
+
+        // Clear current suggestions
+        datalist.innerHTML = '';
+
+        suggestions.forEach(suggestion => {
+            const option = document.createElement('option');
+            option.value = suggestion;
+            datalist.appendChild(option);
+        });
+    };
+
+    // Attach event listeners
+    customerSelect.addEventListener('change', fetchSuggestions);
+    dateInput.addEventListener('change', fetchSuggestions);
+
+    // Initialize suggestions when modal is shown
+    $('#addModal').on('shown.bs.modal', fetchSuggestions);
+});
+
+      var today = new Date();
+    // Format the date as YYYY-MM-DD
+    var formattedDate = today.toISOString().slice(0, 10);
+    document.getElementById('add-transportation_date').value = formattedDate;
+
+    function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+const csrftoken = getCookie('csrftoken');
+    // Function to get the CSRF token from cookies
+$(document).on('change', '.assign-mmission', function() {
+    var pmissionId = $(this).data('pmission-id');
+    var mmissionId = $(this).val() || null;
+
+    if (mmissionId === 'other') {
+        // Show the modal to enter custom notes
+        $('#otherNotesModal').modal('show');
+        $('#saveOtherNotes').off('click').on('click', function() {
+            var otherNotes = $('#otherNotesInput').val();
+            updatePmissionMmission(pmissionId, 'other', otherNotes);
+            $('#otherNotesModal').modal('hide');
+        });
+    } else {
+        updatePmissionMmission(pmissionId, mmissionId, null);
+    }
+});
+
+function updatePmissionMmission(pmissionId, mmissionId, otherNotes) {
+    $.ajax({
+        url: '/drivers/update_pmission_mmission/', // Adjust to match your Django view URL
+        type: 'POST',
+        headers: { 'X-CSRFToken': csrftoken }, // Include CSRF token in headers
+        data: {
+            'pmission_id': pmissionId,
+            'mmission_id': mmissionId === 'other' ? null : mmissionId,
+            'other_notes': otherNotes // Include other notes if provided
+        },
+        success: function(response) {
+            if (response.status === 'success') {
+                var $select = $('select[data-pmission-id="' + pmissionId + '"]');
+
+                if (otherNotes) {
+                    // Update the 'Other' option to display the updated notes
+                    $select.find('option[value="other"]').text(otherNotes).prop('selected', true);
+                } else if (!mmissionId) {
+                    $select.find('option').prop('selected', false); // Deselect all options
+                } else {
+                    $select.find('option[value="' + mmissionId + '"]').prop('selected', true);
+                }
+            }
+        },
+    });
+}
+</script>
+{% else %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css?family=Raleway:400,700');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Raleway, sans-serif;
+}
+
+body {
+  /* Set the background image */
+    background-image: url('/static/image/bc.jpg');
+    /* Adjust background properties as needed */
+    background-size: cover;
+    background-position: center;
+}
+
+.ucontainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.screen {
+  background: linear-gradient(90deg, #5D54A4, #7C78B8);
+  position: relative;
+  height: 600px;
+  width: 360px;
+  box-shadow: 0px 0px 24px #5C5696;
+}
+
+.screen__content {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+}
+
+.screen__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  -webkit-clip-path: inset(0 0 0 0);
+  clip-path: inset(0 0 0 0);
+}
+
+.screen__background__shape {
+  transform: rotate(45deg);
+  position: absolute;
+}
+
+.screen__background__shape1 {
+  height: 520px;
+  width: 520px;
+  background: #FFF;
+  top: -50px;
+  right: 120px;
+  border-radius: 0 72px 0 0;
+}
+
+.screen__background__shape2 {
+  height: 220px;
+  width: 220px;
+  background: #6C63AC;
+  top: -172px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape3 {
+  height: 540px;
+  width: 190px;
+  background: linear-gradient(270deg, #5D54A4, #6A679E);
+  top: -24px;
+  right: 0;
+  border-radius: 32px;
+}
+
+.screen__background__shape4 {
+  height: 400px;
+  width: 200px;
+  background: #7E7BB9;
+  top: 420px;
+  right: 50px;
+  border-radius: 60px;
+}
+
+.login {
+  width: 320px;
+  padding: 30px;
+  padding-top: 156px;
+}
+
+.login__field {
+  padding: 20px 0px;
+  position: relative;
+}
+
+.login__icon {
+  position: absolute;
+  top: 30px;
+  color: #7875B5;
+}
+
+.login__input {
+  border: none;
+  border-bottom: 2px solid #D1D1D4;
+  background: none;
+  padding: 10px;
+  padding-left: 24px;
+  font-weight: 700;
+  width: 75%;
+  transition: .2s;
+}
+
+.login__input:active,
+.login__input:focus,
+.login__input:hover {
+  outline: none;
+  border-bottom-color: #6A679E;
+}
+
+.login__submit {
+  background: #fff;
+  font-size: 14px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  border-radius: 26px;
+  border: 1px solid #D4D3E8;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #4C489D;
+  box-shadow: 0px 2px 2px #5C5696;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.login__submit:active,
+.login__submit:focus,
+.login__submit:hover {
+  border-color: #6A679E;
+  outline: none;
+}
+
+.button__icon {
+  font-size: 24px;
+  margin-left: auto;
+  color: #7875B5;
+}
+
+.social-login {
+  position: absolute;
+  height: 140px;
+  width: 160px;
+  text-align: center;
+  bottom: 0px;
+  right: 0px;
+  color: #fff;
+}
+
+.social-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-login__icon {
+  padding: 20px 10px;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0px 0px 8px #7875B5;
+}
+
+.social-login__icon:hover {
+  transform: scale(1.5);
+}
+</style>
+<div class="ucontainer">
+  <div class="screen">
+    <div class="screen__content">
+      <form class="login" method="POST" autocomplete="off" action="{% url 'customers_index' %}">
+          {% csrf_token %}
+        <div class="login__field">
+          <i class="login__icon fas fa-user"></i>
+          <input type="text" id="username" name = "username" class="login__input" placeholder="User name">
+        </div>
+        <div class="login__field">
+          <i class="login__icon fas fa-lock"></i>
+          <input type="password" id="password" name="password" class="login__input" placeholder="Password">
+        </div>
+        <button class="button login__submit">
+          <span class="button__text">Log In Now</span>
+          <i class="button__icon fas fa-chevron-right"></i>
+        </button>
+      </form>
+      <div class="social-login">
+        <h3>log in via</h3>
+        <div class="social-icons">
+          <a href="#" class="social-login__icon fab fa-instagram"></a>
+          <a href="#" class="social-login__icon fab fa-facebook"></a>
+          <a href="#" class="social-login__icon fab fa-twitter"></a>
+        </div>
+      </div>
+    </div>
+    <div class="screen__background">
+      <span class="screen__background__shape screen__background__shape4"></span>
+      <span class="screen__background__shape screen__background__shape3"></span>
+      <span class="screen__background__shape screen__background__shape2"></span>
+      <span class="screen__background__shape screen__background__shape1"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
