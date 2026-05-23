@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Card #{{ card.number_card }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+        }
+        .card-container {
+            width: 85.6mm;
+            height: 53.98mm;
+            background: linear-gradient(145deg, #ffffff 0%, #f5f5f5 100%);
+            border-radius: 3mm;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            padding: 4mm;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            page-break-after: avoid;
+            border: 1px solid #ccc;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px dashed #aaa;
+            padding-bottom: 2mm;
+        }
+        .card-number {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .logo {
+            font-size: 16pt;
+            font-weight: 900;
+            color: #3498db;
+        }
+        .info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            font-size: 9pt;
+            margin: 2mm 0;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 1mm;
+        }
+        .label {
+            width: 35mm;
+            font-weight: bold;
+            color: #555;
+        }
+        .value {
+            color: #000;
+        }
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-top: 1px dashed #aaa;
+            padding-top: 2mm;
+            font-size: 8pt;
+        }
+        .qr img {
+            width: 15mm;
+            height: 15mm;
+        }
+        .status {
+            padding: 1mm 2mm;
+            border-radius: 1mm;
+            font-weight: bold;
+            font-size: 8pt;
+            color: white;
+            background-color: {{ card.is_active|yesno:'#28a745,#6c757d' }};
+        }
+        @media print {
+            body { background: none; }
+            .card-container { box-shadow: none; border: 1px solid #000; }
+        }
+    </style>
+</head>
+<body>
+    <div class="card-container">
+        <div class="header">
+            <span class="logo">CARDMASTER</span>
+            <span class="card-number">{{ card.number_card }}</span>
+        </div>
+        <div class="info">
+            <div class="info-row">
+                <span class="label">Customer:</span>
+                <span class="value">{{ card.customer.name }}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Vehicle:</span>
+                <span class="value">{{ card.vehicle_number|default:"—" }}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Chassis:</span>
+                <span class="value">{{ card.chassis_number|default:"—" }}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Valid until:</span>
+                <span class="value">{{ card.end_at|date:"Y-m-d" }}</span>
+            </div>
+        </div>
+        <div class="footer">
+            <div class="status">
+                {{ card.is_active|yesno:"ACTIVE,INACTIVE" }}
+            </div>
+            <div class="qr">
+                {% if card.qr_code %}
+                    <img src="{{ card.qr_code.url }}" alt="QR">
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <script>
+        window.onload = function() { window.print(); }
+    </script>
+</body>
+</html>

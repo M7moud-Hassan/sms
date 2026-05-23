@@ -1,0 +1,181 @@
+<!-- Add Card with Quotas Modal -->
+<div class="modal fade" id="addCardWithQuotaModal" tabindex="-1" aria-labelledby="addCardWithQuotaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="addCardWithQuotaModalLabel">
+                    <i class="bi bi-credit-card"></i> Issue New Card with Service Quotas
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'card_add' %}" id="addCardWithQuotaForm" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="row">
+                        <!-- LEFT: Card Information -->
+                        <div class="col-md-6">
+                            <div class="bg-light p-3 rounded">
+                                <h6 class="fw-bold text-primary border-bottom pb-2"><i class="bi bi-credit-card"></i> Card Details</h6>
+                                <div class="mb-2">
+                                    <label for="modal_customer" class="form-label fw-semibold">Customer *</label>
+                                    <select name="customer" id="modal_customer" class="form-select" required>
+                                        <option value="">-- Select Customer --</option>
+                                        {% for customer in customers %}
+                                            <option value="{{ customer.pk }}">{{ customer.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label for="modal_category" class="form-label fw-semibold">Category</label>
+                                    <select name="category" id="modal_category" class="form-select">
+                                        <option value="">-- Select Category --</option>
+                                        {% for cat in categories %}
+                                            <option value="{{ cat.pk }}">{{ cat.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text text-muted small">Select a category to load its services.</div>
+                                </div>
+                                <div class="mb-2">
+                                    <label for="modal_vehicle_number" class="form-label fw-semibold">Vehicle Number</label>
+                                    <input type="text" name="vehicle_number" id="modal_vehicle_number" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="modal_chassis_number" class="form-label fw-semibold">Chassis Number</label>
+                                    <input type="text" name="chassis_number" id="modal_chassis_number" class="form-control">
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label for="modal_end_at" class="form-label fw-semibold">Card Expiration Date</label>
+                                        <input type="date" name="end_at" id="modal_end_at" class="form-control">
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <div class="form-check mt-4">
+                                            <input class="form-check-input" type="checkbox" name="is_active" id="modal_is_active" checked>
+                                            <label class="form-check-label fw-semibold" for="modal_is_active">Active card</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- RIGHT: Service Quotas -->
+                        <div class="col-md-6">
+                            <div class="bg-light p-3 rounded">
+                                <h6 class="fw-bold text-success border-bottom pb-2"><i class="bi bi-gift"></i> Service Quotas</h6>
+                                <p class="small text-muted">Set initial quota (default 0). Only services with quota > 0 will be saved.</p>
+                                <div id="modal-service-list-container">
+                                    <div class="text-center text-muted py-4">
+                                        <i class="bi bi-arrow-up-circle fs-1"></i>
+                                        <p>Select a category to see available services.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Create Card</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const modal = document.getElementById('addCardWithQuotaModal');
+        if (!modal) return;
+
+        const categorySelect = document.getElementById('modal_category');
+        const serviceContainer = document.getElementById('modal-service-list-container');
+
+        function loadServices(categoryId) {
+            if (!categoryId) {
+                serviceContainer.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-arrow-up-circle fs-1"></i>
+                        <p>Select a category to see available services.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            fetch(`{% url 'services_by_category' %}?category_id=${categoryId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.services.length === 0) {
+                        serviceContainer.innerHTML = `<div class="alert alert-warning">No services found in this category.</div>`;
+                        return;
+                    }
+
+                    let html = `<div class="table-responsive">
+                        <table class="table table-sm table-borderless">
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                  
+                                    <th style="width: 120px;">Initial Quota</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                    
+                    data.services.forEach(service => {
+                        html += `
+                            <tr>
+                                <td>${service.name}</td>
+                                
+                                <td>
+                                    <input type="hidden" name="service_id[]" value="${service.id}">
+                                    <input type="number" name="quota[]" class="form-control form-control-sm" min="0" value="0" style="width: 100px;">
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `</tbody></table></div>`;
+                    serviceContainer.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    serviceContainer.innerHTML = `<div class="alert alert-danger">Failed to load services.</div>`;
+                });
+        }
+
+        categorySelect.addEventListener('change', function() {
+            loadServices(this.value);
+        });
+
+        // AJAX form submission
+        const form = document.getElementById('addCardWithQuotaForm');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+            submitBtn.disabled = true;
+
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(modal).hide();
+                    location.reload();
+                } else {
+                    alert('Please correct the errors.');
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred.');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+        });
+    })();
+</script>

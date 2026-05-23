@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Categories & Services{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-tags-fill"></i> Categories & Services</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+            <i class="bi bi-plus-circle"></i> New Category
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addServiceModal">
+            <i class="bi bi-gear"></i> New Service
+        </button>
+    </div>
+</div>
+
+<!-- Categories Grid -->
+<div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+    {% for category in categories %}
+    <div class="col">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">{{ category.name }}</h5>
+                <div>
+                    <span class="badge bg-warning text-dark me-2">{{ category.price }}</span>
+                    <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#editCategoryModal{{ category.pk }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteCategoryModal{{ category.pk }}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">{{ category.description|truncatewords:20|default:"No description" }}</p>
+                <h6 class="fw-bold">Services</h6>
+                {% if category.services.all %}
+                <ul class="list-group list-group-flush">
+                    {% for service in category.services.all %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div>
+                            <span class="fw-bold">{{ service.name }}</span>
+                            <span class="badge bg-info rounded-pill ms-2">{{ service.get_location_type_display }}</span>
+                            <p class="small text-muted mb-0">{{ service.description|truncatechars:40 }}</p>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editServiceModal{{ service.pk }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteServiceModal{{ service.pk }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </li>
+                    <!-- Include modals for each service -->
+                    {% include 'cards/includes/edit_service_modal.html' with service=service %}
+                    {% include 'cards/includes/delete_service_modal.html' with service=service %}
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted fst-italic">No services yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <!-- Include category modals -->
+    {% include 'cards/includes/edit_category_modal.html' with category=category %}
+    {% include 'cards/includes/delete_category_modal.html' with category=category %}
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info text-center py-5">
+            <i class="bi bi-tag fs-1 d-block mb-3"></i>
+            <h4>No categories found</h4>
+            <p class="mb-3">Start by adding your first category.</p>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                <i class="bi bi-plus-circle"></i> Add Category
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Add Category Modal -->
+{% include 'cards/includes/add_category_modal.html' %}
+<!-- Add Service Modal -->
+{% include 'cards/includes/add_service_modal.html' %}
+{% endblock %}

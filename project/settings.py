@@ -19,12 +19,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-!@#4$%5^&*()_+1234567890abcdefghijklmnopqrstuvwxyz")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -48,8 +48,21 @@ INSTALLED_APPS = [
     'mobile',
     'drf_yasg',
     'channels',
+    'phonenumber_field',
+    'card',
+    'sslserver'
+    
     #'csp',
 ]
+CSRF_TRUSTED_ORIGINS = [
+    "https://127.0.0.1:8000",
+    "https://localhost:8000",
+    "https://192.168.1.3:8000",  # ضع IP جهازك
+]
+
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = False
 ASGI_APPLICATION = 'project.asgi.application'
 CHANNEL_LAYERS = {
     "default": {
@@ -127,7 +140,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': 'smtproject',
         'USER': 'postgres',
-        'PASSWORD': '290513mnf',
+        'PASSWORD': 'mahm01142',
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -187,4 +200,29 @@ REST_FRAMEWORK = {
    )
 }
 
+import logging
+from django.utils.log import DEFAULT_LOGGING
 
+LOGGING = DEFAULT_LOGGING.copy()
+
+LOGGING["loggers"]["django.server"]["level"] = "CRITICAL"
+
+
+# Celery settings
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# جدولة المهام الدورية
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'deactivate-expired-cards-daily': {
+        'task': 'card.tasks.deactivate_expired_cards',
+        # 'schedule': crontab(hour=2, minute=0),  # كل يوم الساعة 2 صباحاً
+        'schedule': crontab(minute='*/1'), 
+    },
+}

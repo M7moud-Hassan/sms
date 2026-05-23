@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Service Request | {{ card.number_card }}</title>
+    <!-- Bootstrap 5 + Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Google Fonts for a clean look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .scan-card {
+            max-width: 700px;
+            width: 100%;
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card-header-gradient {
+            background: linear-gradient(to right, #1e3c72, #2a5298);
+            color: white;
+            padding: 25px 30px;
+            border-bottom: none;
+        }
+        .card-header-gradient h3 {
+            margin: 0;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        .card-body-custom {
+            padding: 30px;
+            background-color: white;
+        }
+        .qr-code {
+            background: #f8f9fc;
+            padding: 15px;
+            border-radius: 15px;
+            display: inline-block;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .qr-code img {
+            border-radius: 10px;
+            max-width: 130px;
+            height: auto;
+        }
+        .card-detail-label {
+            font-weight: 600;
+            color: #555;
+            min-width: 110px;
+        }
+        .badge-custom {
+            font-size: 0.9rem;
+            padding: 8px 16px;
+            border-radius: 30px;
+        }
+        .service-select {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 12px 15px;
+            transition: all 0.2s;
+        }
+        .service-select:focus {
+            border-color: #4e73df;
+            box-shadow: 0 0 0 0.2rem rgba(78,115,223,0.25);
+        }
+        .btn-submit {
+            background: linear-gradient(to right, #11998e, #38ef7d);
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            background: linear-gradient(to right, #0f8b7a, #2ed573);
+        }
+        .info-message {
+            background-color: #d1ecf1;
+            border: none;
+            border-radius: 12px;
+            padding: 20px;
+            color: #0c5460;
+        }
+        .footer-note {
+            margin-top: 25px;
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            font-size: 0.9rem;
+        }
+        .footer-note a {
+            color: white;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container d-flex justify-content-center">
+        <div class="card scan-card">
+            <!-- Header with icon -->
+            <div class="card-header-gradient d-flex align-items-center">
+                <i class="bi bi-upc-scan fs-1 me-3"></i>
+                <div>
+                    <h3 class="mb-0">Card Verification</h3>
+                    <p class="mb-0 opacity-75">Scan your card to request a service</p>
+                </div>
+            </div>
+
+            <div class="card-body-custom">
+                <div class="row align-items-center">
+                    <!-- QR Code section -->
+                    <div class="col-md-4 text-center mb-4 mb-md-0">
+                        <div class="qr-code">
+                            {% if card.qr_code %}
+                                <img src="{{ card.qr_code.url }}" alt="QR Code">
+                            {% else %}
+                                <i class="bi bi-qr-code-scan fs-1 text-muted"></i>
+                                <p class="small text-muted mt-2">No QR code</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <!-- Card info -->
+                    <div class="col-md-8">
+                        <h4 class="text-primary fw-bold mb-3">{{ card.number_card }}</h4>
+                        <div class="d-flex mb-2">
+                            <span class="card-detail-label"><i class="bi bi-person-circle me-1"></i> Customer:</span>
+                            <span class="fw-500">{{ card.customer.name }}</span>
+                        </div>
+                        <div class="d-flex mb-2">
+                            <span class="card-detail-label"><i class="bi bi-truck me-1"></i> Vehicle:</span>
+                            <span>{{ card.vehicle_number|default:"—" }}</span>
+                        </div>
+                        <div class="d-flex mb-2">
+                            <span class="card-detail-label"><i class="bi bi-calendar-check me-1"></i> Valid until:</span>
+                            <span>{{ card.end_at|date:"d M Y" }}</span>
+                        </div>
+                        <div class="mt-3">
+                            <span class="badge bg-{% if card.is_active %}success{% else %}secondary{% endif %} badge-custom">
+                                <i class="bi bi-{% if card.is_active %}check-circle{% else %}x-circle{% endif %} me-1"></i>
+                                {{ card.is_active|yesno:"ACTIVE,INACTIVE" }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Service request section -->
+                <div class="request-section">
+                    <h5 class="mb-3"><i class="bi bi-gear-fill me-2"></i>Request a Service</h5>
+                    {% if quotas %}
+                        <form method="post" action="{% url 'submit_request' card.pk %}" id="requestForm">
+                            {% csrf_token %}
+                            <div class="mb-4">
+                                <label for="id_service" class="form-label fw-600">Select available service *</label>
+                                <select name="service" id="id_service" class="form-select service-select" required>
+                                    <option value="" disabled selected>— Choose a service —</option>
+                                    {% for quota in quotas %}
+                                        <option value="{{ quota.service.pk }}" 
+                                                data-remaining="{{ quota.remaining_uses }}">
+                                            {{ quota.service.name }} – 
+                                            <span class="text-success">${{ quota.service.price }}</span> 
+                                            ({{ quota.remaining_uses }} left)
+                                            {% if quota.expiration_date %}
+                                                – expires {{ quota.expiration_date|date:"d/m/Y" }}
+                                            {% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text mt-2">
+                                    <i class="bi bi-info-circle"></i> 
+                                    Each service use deducts one from your remaining quota.
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="id_notes" class="form-label fw-600">Additional notes (optional)</label>
+                                <textarea name="notes" id="id_notes" class="form-control" 
+                                          rows="3" placeholder="e.g., vehicle issues, special requests..."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-submit text-white w-100 btn-lg">
+                                <i class="bi bi-check-circle me-2"></i>Submit Request
+                            </button>
+                        </form>
+                    {% else %}
+                        <div class="info-message d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+                            <div>
+                                <strong>No services available</strong><br>
+                                This card has no remaining service quotas. Please contact support.
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Optional footer note (can be removed if not needed) -->
+    <div class="footer-note">
+        <small>Powered by CardMaster • Secure Service Request</small>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function() {
+            const form = document.getElementById('requestForm');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Submitting...';
+                    submitBtn.disabled = true;
+
+                    fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Extract the numeric ID from request_number (REQ-2025-000123)
+                            const requestId = data.request_number.split('-').pop();
+                            window.location.href = "{% url 'request_status' 0 %}".replace('0', requestId);
+                        } else {
+                            alert('Submission failed. Please check your selection and try again.');
+                            submitBtn.innerHTML = originalText;
+                            submitBtn.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred. Please try again later.');
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = false;
+                    });
+                });
+            }
+        })();
+    </script>
+</body>
+</html>

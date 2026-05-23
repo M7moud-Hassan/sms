@@ -1,0 +1,68 @@
+<!-- Edit Service Modal -->
+<div class="modal fade" id="editServiceModal{{ service.pk }}" tabindex="-1" aria-labelledby="editServiceModalLabel{{ service.pk }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="editServiceModalLabel{{ service.pk }}"><i class="bi bi-pencil-square"></i> Edit Service</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'service_edit' service.pk %}" id="editServiceForm{{ service.pk }}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="service_name_{{ service.pk }}" class="form-label fw-bold">Service Name *</label>
+                        <input type="text" name="name" id="service_name_{{ service.pk }}" class="form-control" value="{{ service.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="service_description_{{ service.pk }}" class="form-label fw-bold">Description</label>
+                        <textarea name="description" id="service_description_{{ service.pk }}" class="form-control" rows="2">{{ service.description }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="service_category_{{ service.pk }}" class="form-label fw-bold">Category *</label>
+                        <select name="category" id="service_category_{{ service.pk }}" class="form-select" required>
+                            {% for category in categories %}
+                            <option value="{{ category.pk }}" {% if service.category.pk == category.pk %}selected{% endif %}>{{ category.name }} (${{ category.price }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="service_location_type_{{ service.pk }}" class="form-label fw-bold">Location Type</label>
+                        <select name="location_type" id="service_location_type_{{ service.pk }}" class="form-select">
+                            <option value="1" {% if service.location_type == 1 %}selected{% endif %}>Single Location</option>
+                            <option value="2" {% if service.location_type == 2 %}selected{% endif %}>Pickup and Dropoff</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-save"></i> Update Service</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+    (function() {
+        const form = document.getElementById('editServiceForm{{ service.pk }}');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('editServiceModal{{ service.pk }}')).hide();
+                        location.reload();
+                    } else {
+                        alert('Please correct the errors.');
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        }
+    })();
+</script>

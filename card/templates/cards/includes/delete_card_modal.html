@@ -1,0 +1,45 @@
+<!-- Delete Card Modal -->
+<div class="modal fade" id="deleteCardModal{{ card.pk }}" tabindex="-1" aria-labelledby="deleteCardModalLabel{{ card.pk }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteCardModalLabel{{ card.pk }}"><i class="bi bi-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete card <strong>{{ card.number_card }}</strong> for customer <strong>{{ card.customer.name }}</strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'card_delete' card.pk %}" id="deleteCardForm{{ card.pk }}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function() {
+        const form = document.getElementById('deleteCardForm{{ card.pk }}');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('deleteCardModal{{ card.pk }}')).hide();
+                        location.reload();
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        }
+    })();
+</script>

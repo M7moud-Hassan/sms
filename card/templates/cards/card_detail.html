@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Card {{ card.number_card }}{% endblock %}
+{% block content %}
+<div class="row">
+    <!-- Left Column: Card Details -->
+    <div class="col-md-5 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0"><i class="bi bi-credit-card"></i> Card Details</h4>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr><th style="width: 40%;">Card Number</th><td><span class="fw-bold text-primary">{{ card.number_card }}</span></td></tr>
+                    <tr><th>Customer</th><td>{{ card.customer.name }}</td></tr>
+                    <tr><th>Phone</th><td>{{ card.customer.phone|default:"—" }}</td></tr>
+                    <tr><th>Category</th><td>{{ card.category.name|default:"—" }}</td></tr>
+                    <tr><th>Vehicle</th><td>{{ card.vehicle_number|default:"—" }}</td></tr>
+                    <tr><th>Chassis</th><td>{{ card.chassis_number|default:"—" }}</td></tr>
+                    <tr><th>Issued On</th><td>{{ card.created_at|date:"Y-m-d H:i" }}</td></tr>
+                    <tr><th>Expires On</th><td>{{ card.end_at|date:"Y-m-d" }}</td></tr>
+                    <tr><th>Price</th><td>{{ card.category.price }}</td></tr>
+                    <tr><th>Status</th>
+                        <td>
+                            {% if card.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                <div class="mt-3 d-flex gap-2">
+                    <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editCardModal{{ card.pk }}">
+                        <i class="bi bi-pencil"></i> Edit
+                    </button>
+                    <a href="{% url 'card_print' card.pk %}" target="_blank" class="btn btn-secondary">
+                        <i class="bi bi-printer"></i> Print
+                    </a>
+                    <a href="{% url 'card_list' %}" class="btn btn-outline-dark">Back</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: QR Code & Service Quotas -->
+    <div class="col-md-7">
+        <!-- QR Code Card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-qr-code"></i> QR Code</h5>
+            </div>
+            <div class="card-body text-center">
+                {% if card.qr_code %}
+                    <img src="{{ card.qr_code.url }}" alt="QR Code" style="width: 180px; height: 180px;" class="img-fluid border p-2">
+                {% else %}
+                    <p class="text-muted">No QR code generated.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Service Quotas Table -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-gift"></i> Service Quotas</h5>
+                <!-- New button to add any service quota -->
+                <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addServiceQuotaModal">
+                    <i class="bi bi-plus-circle"></i> Add Service Quota
+                </button>
+            </div>
+            <div class="card-body p-0">
+                {% if card.service_quotas.all %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Service</th>
+                                <th class="text-center">Remaining</th>
+                                <th class="text-center">Total Provided</th>
+                                <th class="text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for quota in card.service_quotas.all %}
+                            <tr>
+                                <td>
+                                    <strong>{{ quota.service.name }}</strong><br>
+                                    <small class="text-muted">{{ quota.service.category.name }}</small>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-{% if quota.remaining_uses > 0 %}success{% else %}secondary{% endif %} fs-6">
+                                        {{ quota.remaining_uses }}
+                                    </span>
+                                </td>
+                                <td class="text-center">{{ quota.total_provided }}</td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-success add-bonus-btn" 
+                                            data-service-id="{{ quota.service.id }}"
+                                            data-service-name="{{ quota.service.name }}">
+                                        <i class="bi bi-plus"></i> Bonus
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-info-circle fs-2"></i>
+                    <p class="mb-0">No service quotas assigned to this card.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Edit Card Modal (if needed) -->
+{% include 'cards/includes/edit_card_modal.html' with card=card %}
+
+<!-- Add Service Quota Modal (new) -->
+<div class="modal fade" id="addServiceQuotaModal" tabindex="-1" aria-labelledby="addServiceQuotaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="addServiceQuotaModalLabel"><i class="bi bi-plus-circle"></i> Add Service Quota</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'add_service_quota' card.pk %}" id="addServiceQuotaForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="quota_service" class="form-label fw-bold">Service</label>
+                        <select name="service" id="quota_service" class="form-select" required>
+                            <option value="">-- Select a service --</option>
+                            {% for service in all_services %}
+                                <option value="{{ service.pk }}">{{ service.name }} ({{ service.category.name }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quota_quantity" class="form-label fw-bold">Initial Quantity</label>
+                        <input type="number" name="quantity" id="quota_quantity" class="form-control" min="1" value="1" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Add Quota</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Bonus Modal (reused for existing services) -->
+<div class="modal fade" id="addBonusModal" tabindex="-1" aria-labelledby="addBonusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="addBonusModalLabel"><i class="bi bi-gift"></i> Add Bonus</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'add_bonus' card.pk %}" id="addBonusForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="bonus_service" class="form-label fw-bold">Service</label>
+                        <select name="service" id="bonus_service" class="form-select" required>
+                            <option value="">-- Select Service --</option>
+                            {% for service in all_services %}
+                                <option value="{{ service.pk }}">{{ service.name }} ({{ service.category.name }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bonus_quantity" class="form-label fw-bold">Bonus Quantity</label>
+                        <input type="number" name="remaining_uses" id="bonus_quantity" class="form-control" min="1" value="1" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-plus-circle"></i> Add Bonus</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- Existing Bonus Button Logic ----------
+        const bonusButtons = document.querySelectorAll('.add-bonus-btn');
+        const bonusServiceSelect = document.getElementById('bonus_service');
+        const bonusModalElement = document.getElementById('addBonusModal');
+        const bonusModalTitle = document.getElementById('addBonusModalLabel');
+
+        if (bonusModalElement && bonusServiceSelect) {
+            const bonusModal = new bootstrap.Modal(bonusModalElement);
+
+            bonusButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const serviceId = this.dataset.serviceId;
+                    const serviceName = this.dataset.serviceName;
+                    
+                    bonusServiceSelect.value = serviceId;
+                    bonusModalTitle.innerHTML = `<i class="bi bi-gift"></i> Add Bonus for ${serviceName}`;
+                    bonusModal.show();
+                });
+            });
+
+            // Bonus form AJAX
+            const bonusForm = document.getElementById('addBonusForm');
+            if (bonusForm) {
+                bonusForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const submitBtn = bonusForm.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+                    submitBtn.disabled = true;
+
+                    fetch(bonusForm.action, {
+                        method: 'POST',
+                        body: new FormData(bonusForm),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            bonusModal.hide();
+                            location.reload();
+                        } else {
+                            alert('Please correct the errors.');
+                            submitBtn.innerHTML = originalText;
+                            submitBtn.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred.');
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = false;
+                    });
+                });
+            }
+        }
+
+        // ---------- New Add Service Quota Form ----------
+        const quotaForm = document.getElementById('addServiceQuotaForm');
+        if (quotaForm) {
+            quotaForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const submitBtn = quotaForm.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+                submitBtn.disabled = true;
+
+                fetch(quotaForm.action, {
+                    method: 'POST',
+                    body: new FormData(quotaForm),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('addServiceQuotaModal')).hide();
+                        location.reload();
+                    } else {
+                        alert('Error: ' + (data.error || 'Please check the form.'));
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred.');
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                });
+            });
+        }
+    })();
+</script>
+{% endblock %}

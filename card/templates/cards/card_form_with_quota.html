@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if object %}Edit Card #{{ object.number_card }}{% else %}Issue New Card{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-10">
+        <div class="card shadow-lg border-0 rounded-lg">
+            <div class="card-header bg-gradient-primary text-white py-3">
+                <h4 class="mb-0 fw-bold">
+                    {% if object %}
+                        <i class="bi bi-pencil-square"></i> Edit Card <span class="text-warning">{{ object.number_card }}</span>
+                    {% else %}
+                        <i class="bi bi-plus-circle"></i> Issue New Card
+                    {% endif %}
+                </h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" id="cardForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="row g-4">
+                        <!-- LEFT: Card Information -->
+                        <div class="col-lg-6">
+                            <div class="bg-light p-4 rounded-3">
+                                <h5 class="border-bottom pb-2 mb-3 fw-bold text-primary">
+                                    <i class="bi bi-credit-card"></i> Card Details
+                                </h5>
+                                
+                                <div class="mb-3">
+                                    <label for="{{ form.customer.id_for_label }}" class="form-label fw-semibold">Customer *</label>
+                                    {{ form.customer }}
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ form.category.id_for_label }}" class="form-label fw-semibold">Category</label>
+                                    {{ form.category }}
+                                    <div class="form-text text-muted small">Select a category to load its services.</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ form.vehicle_number.id_for_label }}" class="form-label fw-semibold">Vehicle Number</label>
+                                    {{ form.vehicle_number }}
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ form.chassis_number.id_for_label }}" class="form-label fw-semibold">Chassis Number</label>
+                                    {{ form.chassis_number }}
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.end_at.id_for_label }}" class="form-label fw-semibold">Card Expiration Date</label>
+                                        {{ form.end_at }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <div class="form-check mt-4">
+                                            {{ form.is_active }}
+                                            <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">
+                                                Active card
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT: Service Quotas (all services of selected category) -->
+                        <div class="col-lg-6">
+                            <div class="bg-light p-4 rounded-3">
+                                <h5 class="border-bottom pb-2 mb-3 fw-bold text-success">
+                                    <i class="bi bi-gift"></i> Service Quotas
+                                </h5>
+                                <p class="small text-muted">Set initial quota (default 0). Only services with quota > 0 will be saved.</p>
+                                
+                                <div id="service-list-container">
+                                    <!-- Services will be loaded here via AJAX -->
+                                    <div class="text-center text-muted py-4">
+                                        <i class="bi bi-arrow-up-circle fs-1"></i>
+                                        <p>Select a category to see available services.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'card_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> {% if object %}Update Card{% else %}Create Card{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const categorySelect = document.getElementById('{{ form.category.id_for_label }}');
+        const serviceContainer = document.getElementById('service-list-container');
+        
+        // For edit mode: load existing quotas
+        const existingQuotas = {% if existing_quotas %}{
+            {% for q in existing_quotas %}
+                "{{ q.service_id }}": {{ q.remaining_uses }},
+            {% endfor %}
+        }{% else %}{}{% endif %};
+
+        function loadServices(categoryId) {
+            if (!categoryId) {
+                serviceContainer.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-arrow-up-circle fs-1"></i>
+                        <p>Select a category to see available services.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            fetch(`{% url 'services_by_category' %}?category_id=${categoryId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.services.length === 0) {
+                        serviceContainer.innerHTML = `
+                            <div class="alert alert-warning">
+                                No services found in this category.
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    let html = `<div class="table-responsive">
+                        <table class="table table-sm table-borderless">
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Price</th>
+                                    <th style="width: 120px;">Initial Quota</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                    
+                    data.services.forEach(service => {
+                        const existing = existingQuotas[service.id] || 0;
+                        html += `
+                            <tr>
+                                <td>${service.name}</td>
+                                <td>$${service.price}</td>
+                                <td>
+                                    <input type="hidden" name="service_id[]" value="${service.id}">
+                                    <input type="number" name="quota[]" class="form-control form-control-sm" min="0" value="${existing}" style="width: 100px;">
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `</tbody></table></div>`;
+                    serviceContainer.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error loading services:', error);
+                    serviceContainer.innerHTML = `<div class="alert alert-danger">Failed to load services.</div>`;
+                });
+        }
+
+        // Load services when category changes
+        categorySelect.addEventListener('change', function() {
+            loadServices(this.value);
+        });
+
+        // Load on page load if category is preselected (edit mode)
+        if (categorySelect.value) {
+            loadServices(categorySelect.value);
+        }
+    })();
+</script>
+
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+    }
+    .form-label.fw-semibold {
+        font-weight: 600;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+    }
+</style>
+{% endblock %}

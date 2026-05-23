@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}Cards{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-credit-card-2-front-fill"></i> Cards</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{% url 'category_service' %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-tags"></i> Categories & Services
+        </a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCardWithQuotaModal">
+            <i class="bi bi-plus-lg"></i> Issue New Card
+        </button>
+    </div>
+</div>
+
+<!-- Filter Card -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="search" class="form-label fw-bold">Search</label>
+                <input type="text" name="q" id="search" class="form-control"
+                       placeholder="Card #, customer, vehicle" value="{{ request.GET.q }}">
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label fw-bold">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All</option>
+                    <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Apply</button>
+                <a href="{% url 'card_list' %}" class="btn btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Cards Table -->
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Card #</th>
+                <th>Customer</th>
+                <th>Vehicle</th>
+                <th>Issued</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for card in cards %}
+            <tr>
+                <td><a href="{% url 'card_detail' card.pk %}">{{ card.number_card }}</a></td>
+                <td>{{ card.customer.name }}</td>
+                <td>{{ card.vehicle_number|default:"—" }}</td>
+                <td>{{ card.created_at|date:"Y-m-d" }}</td>
+                <td>{{ card.end_at|date:"Y-m-d" }}</td>
+                <td>
+                    {% if card.is_active %}
+                        <span class="badge bg-success">Active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addBonusModal{{ card.pk }}" title="Add Bonus">
+    <i class="bi bi-gift"></i>
+</button>
+                    <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editCardModal{{ card.pk }}" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCardModal{{ card.pk }}" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                    <a href="{% url 'card_print' card.pk %}" target="_blank" class="btn btn-sm btn-secondary" title="Print">
+                        <i class="bi bi-printer"></i>
+                    </a>
+                </td>
+            </tr>
+            {% include 'cards/includes/edit_card_modal.html' with card=card %}
+            {% include 'cards/includes/delete_card_modal.html' with card=card %}
+            {% include 'cards/includes/add_bonus_modal.html' with card=card services=services %}
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">No cards found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Add Card Modal -->
+{% include 'cards/includes/add_card_modal.html' %}
+{% endblock %}

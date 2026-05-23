@@ -3,3 +3,6 @@ Scripts/
 
 # Environment variables
 .env
+venv/
+ssl/
+media/

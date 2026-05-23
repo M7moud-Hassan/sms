@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<!-- Top Navigation Bar with Links and Notification Bell -->
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <!-- New Card Button (with quota modal) -->
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCardWithQuotaModal">
+                <i class="bi bi-credit-card"></i> New Card
+            </button>
+
+            <!-- Main Navigation Links -->
+            <a href="{% url 'customer_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-people"></i> Customers
+            </a>
+            <a href="{% url 'card_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-credit-card-2-front"></i> Cards
+            </a>
+            <a href="{% url 'category_service' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-grid"></i> Categories & Services
+            </a>
+            <a href="{% url 'request_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-ticket-detailed"></i> Requests
+            </a>
+
+            <!-- Reports Dropdown -->
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-sm btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-bar-chart"></i> Reports
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{% url 'card_report' %}"><i class="bi bi-credit-card"></i> Card Sales Report</a></li>
+                    <li><a class="dropdown-item" href="{% url 'service_report' %}"><i class="bi bi-gear"></i> Services Provided Report</a></li>
+                    <li><a class="dropdown-item" href="{% url 'card_lookup' %}"><i class="bi bi-search"></i> Card Lookup</a></li>
+                </ul>
+            </div>
+        </div>
+       
+
+        <!-- Notification Bell -->
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-warning position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-bell"></i>
+                {% if notification_count > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        {{ notification_count }}
+                    </span>
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width: 300px;">
+                <li><h6 class="dropdown-header">Requests without Mission</h6></li>
+                {% for req in requests_without_mission %}
+                <li>
+                    <a class="dropdown-item" href="{% url 'request_list' %}?q={{ req.request_number }}">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                        {{ req.request_number }} - {{ req.service.name }}
+                    </a>
+                </li>
+                {% empty %}
+                <li><span class="dropdown-item text-muted">No requests without mission</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards Row 1 -->
+<div class="row">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-primary border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-primary text-uppercase fw-bold mb-1">Total Cards</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_cards }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-credit-card fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-success border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-success text-uppercase fw-bold mb-1">Active Cards</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ active_cards }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-check-circle fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-warning text-uppercase fw-bold mb-1">Expired Cards</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ expired_cards }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-calendar-x fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-info border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-info text-uppercase fw-bold mb-1">Expiring Soon</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ expiring_soon_cards }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-hourglass-split fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards Row 2 -->
+<div class="row mt-3">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-secondary border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-secondary text-uppercase fw-bold mb-1">Total Customers</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_customers }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-people fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-dark border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-dark text-uppercase fw-bold mb-1">Total Services</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_services }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-gear fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-danger text-uppercase fw-bold mb-1">Total Requests</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_requests }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-ticket-detailed fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Banner for requests without mission -->
+{% if requests_without_mission %}
+<div class="alert alert-warning alert-dismissible fade show mt-3" role="alert">
+    <strong><i class="bi bi-exclamation-triangle"></i> Attention!</strong> 
+    There {{ requests_without_mission|length|pluralize:"is,are" }} {{ requests_without_mission|length }} request{{ requests_without_mission|length|pluralize }} without a mission.
+    <a href="{% url 'request_list' %}?status=pending" class="alert-link">View Requests</a>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+<!-- Recently Issued Cards -->
+<h3 class="mt-4">Recently Issued Cards</h3>
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Card #</th>
+                <th>Customer</th>
+                <th>Vehicle</th>
+                <th>Issued</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for card in recent_cards %}
+            <tr>
+                <td><a href="{% url 'card_detail' card.pk %}">{{ card.number_card }}</a></td>
+                <td>{{ card.customer.name }}</td>
+                <td>{{ card.vehicle_number|default:"—" }}</td>
+                <td>{{ card.created_at|date:"Y-m-d" }}</td>
+                <td>{{ card.end_at|date:"Y-m-d" }}</td>
+                <td>
+                    {% if card.is_active %}
+                        <span class="badge bg-success">Active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'card_detail' card.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
+                    <a href="{% url 'card_print' card.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer"></i></a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center py-4 text-muted">No cards issued yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Include Modals -->
+{% include 'cards/includes/add_customer_modal.html' %}
+{% include 'cards/includes/add_card_with_quota_modal.html' %}
+{% endblock %}

@@ -40,4 +40,75 @@
         {% block content %}
         {% endblock %}
   </body>
+
+  <!-- في base.html، ضمن شريط التنقل -->
+
+
+<script>
+    (function() {
+        // فقط للمستخدمين المسجلين (staff)
+        {% if user.is_authenticated and user.is_staff %}
+        let lastCount = 0;
+        const bellCount = document.getElementById('bellCount');
+        const bellIcon = document.getElementById('bellIcon');
+
+        // دالة لتوليد صوت بسيط باستخدام Web Audio API
+        function playBellSound() {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // نغمة عالية
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        }
+
+        // دالة لفحص الطلبات الجديدة
+        function checkNewRequests() {
+            fetch('{% url "check_new_requests" %}')
+                .then(response => response.json())
+                .then(data => {
+                    const count = data.count;
+                    if (count > lastCount) {
+                        // هناك طلبات جديدة – أصدر صوتاً
+                        playBellSound();
+                    }
+                    if (count > 0) {
+                        bellCount.innerText = count;
+                        bellCount.style.display = 'inline';
+                    } else {
+                        bellCount.style.display = 'none';
+                    }
+                    lastCount = count;
+                })
+                .catch(err => console.error('Error checking new requests:', err));
+        }
+
+        // عند النقر على الجرس، نعيد ضبط العداد ونحدث وقت المشاهدة
+        bellIcon.addEventListener('click', function(e) {
+            e.preventDefault();
+            fetch('{% url "mark_requests_seen" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(() => {
+                bellCount.style.display = 'none';
+                lastCount = 0;
+            });
+        });
+
+        // فحص كل 5 ثوانٍ
+        setInterval(checkNewRequests, 5000);
+
+        // فحص فوري عند تحميل الصفحة
+        checkNewRequests();
+        {% endif %}
+    })();
+</script>
 </html>

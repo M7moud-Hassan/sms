@@ -1,0 +1,62 @@
+<!-- Add Bonus Quota Modal (for Card) -->
+<div class="modal fade" id="addBonusModal{{ card.pk }}" tabindex="-1" aria-labelledby="addBonusModalLabel{{ card.pk }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="addBonusModalLabel{{ card.pk }}"><i class="bi bi-gift"></i> Add Bonus Service</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'add_bonus' card.pk %}" id="addBonusForm{{ card.pk }}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="service_{{ card.pk }}" class="form-label fw-bold">Service *</label>
+                        <select name="service" id="service_{{ card.pk }}" class="form-select" required>
+                            <option value="">-- Select Service --</option>
+                            {% for service in services %}
+                            <option value="{{ service.pk }}">{{ service.name }} (${{ service.price }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="remaining_uses_{{ card.pk }}" class="form-label fw-bold">Bonus Quantity *</label>
+                        <input type="number" name="remaining_uses" id="remaining_uses_{{ card.pk }}" class="form-control" min="1" value="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="expiration_date_{{ card.pk }}" class="form-label fw-bold">Expiration Date (optional)</label>
+                        <input type="date" name="expiration_date" id="expiration_date_{{ card.pk }}" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-plus-circle"></i> Add Bonus</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+    (function() {
+        const form = document.getElementById('addBonusForm{{ card.pk }}');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('addBonusModal{{ card.pk }}')).hide();
+                        location.reload();
+                    } else {
+                        alert('Please correct the errors.');
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        }
+    })();
+</script>

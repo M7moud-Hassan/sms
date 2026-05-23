@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Card Service Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(145deg, #1e3c72, #2a5298);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+        }
+        .portal-card {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: #1e3c72;
+            color: white;
+            padding: 25px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+        .body {
+            padding: 20px;
+        }
+        .scanner-container {
+            background: #f0f2f5;
+            border-radius: 16px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        #reader {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .btn-scan {
+            background: #2a5298;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 15px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            width: 100%;
+        }
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 12px;
+            width: 100%;
+        }
+        .card-info {
+            background: #f8f9fc;
+            border-radius: 16px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .service-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .service-item:last-child {
+            border-bottom: none;
+        }
+        .badge-remaining {
+            background: #28a745;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        .btn-request {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 15px;
+            font-size: 1.1rem;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .status-section {
+            background: #f0f2f5;
+            border-radius: 16px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .error {
+            color: #dc3545;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .alert-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="portal-card">
+        <div class="header">
+            <h1><i class="bi bi-upc-scan"></i> Card Portal</h1>
+            <p>Scan your card to request service</p>
+        </div>
+        <div class="body">
+            <!-- Scanner Section -->
+            <div class="scanner-container">
+                <div id="reader"></div>
+                <div class="controls">
+                    <button class="btn-scan" id="startScanBtn">
+                        <i class="bi bi-camera"></i> Start Camera
+                    </button>
+                    <button class="btn-stop hidden" id="stopScanBtn">
+                        <i class="bi bi-stop-circle"></i> Stop
+                    </button>
+                </div>
+                <div id="scanError" class="error"></div>
+            </div>
+
+            <!-- Card Details (hidden until scan) -->
+            <div id="cardDetails" class="card-info hidden">
+                <h5><i class="bi bi-credit-card"></i> Card Details</h5>
+                <p><strong>Number:</strong> <span id="cardNumber"></span></p>
+                <p><strong>Customer:</strong> <span id="customerName"></span></p>
+                <p><strong>Vehicle:</strong> <span id="vehicleNumber"></span></p>
+                <p><strong>Valid:</strong> <span id="validUntil"></span></p>
+                
+                <div id="servicesList"></div>
+                
+                <select id="serviceSelect" class="form-select mt-3">
+                    <option value="">-- Choose a service --</option>
+                </select>
+
+                <!-- Dynamic location fields -->
+                <div id="locationFields" style="display: none;">
+                    <div class="mb-3" id="fromField">
+                        <label for="fromLocation" class="form-label fw-bold">Pickup Location</label>
+                        <input type="text" class="form-control" id="fromLocation" name="from_location" placeholder="Enter pickup address">
+                    </div>
+                    <div class="mb-3" id="toField" style="display: none;">
+                        <label for="toLocation" class="form-label fw-bold">Dropoff Location</label>
+                        <input type="text" class="form-control" id="toLocation" name="to_location" placeholder="Enter dropoff address">
+                    </div>
+                </div>
+
+                <!-- Contact Phone Field -->
+                <div class="mb-3">
+                    <label for="contactPhone" class="form-label fw-bold">Contact Phone</label>
+                    <input type="tel" class="form-control" id="contactPhone"  name="contact_phone" placeholder="Enter contact phone number">
+                </div>
+                
+                <button class="btn-request" id="requestBtn">Submit Request</button>
+                <div id="requestResult" class="alert-message"></div>
+            </div>
+
+            <!-- Status Lookup -->
+            <div class="status-section">
+                <h5><i class="bi bi-search"></i> Track Request</h5>
+                <input type="text" class="form-control" id="requestNumber" placeholder="Enter request number">
+                <button class="btn btn-primary w-100 mt-2" id="trackBtn">Check Status</button>
+                <div id="statusResult" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+            // DOM elements
+            const startBtn = document.getElementById('startScanBtn');
+            const stopBtn = document.getElementById('stopScanBtn');
+            const readerDiv = document.getElementById('reader');
+            const scanError = document.getElementById('scanError');
+            const cardDetails = document.getElementById('cardDetails');
+            const cardNumberSpan = document.getElementById('cardNumber');
+            const customerNameSpan = document.getElementById('customerName');
+            const vehicleNumberSpan = document.getElementById('vehicleNumber');
+            const validUntilSpan = document.getElementById('validUntil');
+            const servicesListDiv = document.getElementById('servicesList');
+            const serviceSelect = document.getElementById('serviceSelect');
+            const locationFields = document.getElementById('locationFields');
+            const fromField = document.getElementById('fromField');
+            const toField = document.getElementById('toField');
+            const fromInput = document.getElementById('fromLocation');
+            const toInput = document.getElementById('toLocation');
+            const contactPhoneInput = document.getElementById('contactPhone');
+            const requestBtn = document.getElementById('requestBtn');
+            const requestResult = document.getElementById('requestResult');
+            const trackBtn = document.getElementById('trackBtn');
+            const requestNumberInput = document.getElementById('requestNumber');
+            const statusResult = document.getElementById('statusResult');
+
+            let html5QrCode = null;
+            let currentCardId = null;
+            let servicesData = [];
+
+            // ---------- Start Camera ----------
+            startBtn.addEventListener('click', function() {
+                scanError.innerText = '';
+                readerDiv.innerHTML = '';
+
+                html5QrCode = new Html5Qrcode("reader");
+                const qrSuccess = (decodedText) => {
+                    html5QrCode.stop().then(() => {
+                        startBtn.classList.remove('hidden');
+                        stopBtn.classList.add('hidden');
+                        validateCard(decodedText.trim());
+                    }).catch(err => console.log(err));
+                };
+
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    rememberLastUsedCamera: true,
+                    videoConstraints: {
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    config,
+                    qrSuccess,
+                    () => {}
+                ).then(() => {
+                    startBtn.classList.add('hidden');
+                    stopBtn.classList.remove('hidden');
+                }).catch(err => {
+                    scanError.innerText = 'Camera error: ' + (err.message || 'Please grant permission.');
+                    startBtn.classList.remove('hidden');
+                    stopBtn.classList.add('hidden');
+                });
+            });
+
+            stopBtn.addEventListener('click', function() {
+                if (html5QrCode) {
+                    html5QrCode.stop().then(() => {
+                        startBtn.classList.remove('hidden');
+                        stopBtn.classList.add('hidden');
+                    });
+                }
+            });
+
+            // ---------- Validate Card (initial scan, clears messages) ----------
+            function validateCard(cardNumber) {
+                fetch(`{% url 'public_validate_card' %}?number=${encodeURIComponent(cardNumber)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            scanError.innerText = data.error;
+                            cardDetails.classList.add('hidden');
+                            return;
+                        }
+                        currentCardId = data.id;
+                        cardNumberSpan.innerText = data.number_card;
+                        customerNameSpan.innerText = data.customer;
+                        vehicleNumberSpan.innerText = data.vehicle || '—';
+                        validUntilSpan.innerText = data.valid_until || '—';
+
+                        // Pre-fill contact phone with customer's phone (if available)
+                        if (data.phone) {
+                            contactPhoneInput.value = data.phone;
+                        } else {
+                            contactPhoneInput.value = '';
+                        }
+
+                        servicesData = data.services; // store for later use
+                        let servicesHtml = '<h6 class="mt-2">Available Services</h6>';
+                        let options = '<option value="">-- Select --</option>';
+                        data.services.forEach(s => {
+                            servicesHtml += `
+                                <div class="service-item">
+                                    <span>${s.name}</span>
+                                    <span class="badge-remaining">${s.remaining} left</span>
+                                </div>
+                            `;
+                            if (s.remaining > 0) {
+                                options += `<option value="${s.id}" data-location="${s.location_type}">${s.name}</option>`;
+                            }
+                        });
+                        servicesListDiv.innerHTML = servicesHtml;
+                        serviceSelect.innerHTML = options;
+
+                        cardDetails.classList.remove('hidden');
+                        requestResult.innerHTML = '';
+                        // Hide location fields initially
+                        locationFields.style.display = 'none';
+                    })
+                    .catch(err => {
+                        scanError.innerText = 'Validation failed.';
+                        console.error(err);
+                    });
+            }
+
+            // ---------- Service selection change ----------
+            serviceSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const locationType = selectedOption.dataset.location;
+                
+                if (locationType) {
+                    locationFields.style.display = 'block';
+                    if (locationType === '1') {
+                        fromField.style.display = 'block';
+                        toField.style.display = 'none';
+                        toInput.value = ''; // clear
+                    } else {
+                        fromField.style.display = 'block';
+                        toField.style.display = 'block';
+                    }
+                } else {
+                    locationFields.style.display = 'none';
+                }
+            });
+
+            // ---------- Refresh Card Details (keeps messages) ----------
+            function refreshCardDetails(cardNumber) {
+                fetch(`{% url 'public_validate_card' %}?number=${encodeURIComponent(cardNumber)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            console.error(data.error);
+                            return;
+                        }
+                        cardNumberSpan.innerText = data.number_card;
+                        customerNameSpan.innerText = data.customer;
+                        vehicleNumberSpan.innerText = data.vehicle || '—';
+                        validUntilSpan.innerText = data.valid_until || '—';
+
+                        // Update phone field (in case it was changed elsewhere)
+                        if (data.phone && !contactPhoneInput.value) {
+                            contactPhoneInput.value = data.phone;
+                        }
+
+                        // Update services list and dropdown
+                        let servicesHtml = '<h6 class="mt-2">Available Services</h6>';
+                        let options = '<option value="">-- Select --</option>';
+                        data.services.forEach(s => {
+                            servicesHtml += `
+                                <div class="service-item">
+                                    <span>${s.name}</span>
+                                    <span class="badge-remaining">${s.remaining} left</span>
+                                </div>
+                            `;
+                            if (s.remaining > 0) {
+                                options += `<option value="${s.id}" data-location="${s.location_type}">${s.name}</option>`;
+                            }
+                        });
+                        servicesListDiv.innerHTML = servicesHtml;
+                        serviceSelect.innerHTML = options;
+                    })
+                    .catch(err => console.error(err));
+            }
+
+            // ---------- Submit Request ----------
+            requestBtn.addEventListener('click', function() {
+                const serviceId = serviceSelect.value;
+                if (!serviceId || !currentCardId) {
+                    requestResult.innerHTML = '<div class="alert alert-danger">Please select a service.</div>';
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('service', serviceId);
+                formData.append('csrfmiddlewaretoken', csrftoken);
+                
+                // Append location fields if visible
+                if (locationFields.style.display !== 'none') {
+                    formData.append('from_location', fromInput.value);
+                    if (toField.style.display !== 'none') {
+                        formData.append('to_location', toInput.value);
+                    }
+                }
+
+                // Append contact phone
+                formData.append('contact_phone', contactPhoneInput.value);
+
+                fetch(`{% url 'public_submit_request' 0 %}`.replace('0', currentCardId), {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrftoken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        requestResult.innerHTML = `
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                <strong>Success!</strong> Request submitted.<br>
+                                Your request number is: <strong>${data.request_number}</strong>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        `;
+                        // Refresh the service list without clearing the message
+                        refreshCardDetails(cardNumberSpan.innerText);
+                    } else {
+                        requestResult.innerHTML = `
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <strong>Error:</strong> ${data.error || 'number phone not valid.'}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(() => {
+                    requestResult.innerHTML = `
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <strong>Network error.</strong> Please try again.
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    `;
+                });
+            });
+
+            // ---------- Track Request ----------
+            trackBtn.addEventListener('click', function() {
+                const reqNum = requestNumberInput.value.trim();
+                if (!reqNum) {
+                    statusResult.innerHTML = '<div class="alert alert-warning">Enter a request number.</div>';
+                    return;
+                }
+                fetch(`{% url 'public_request_status' %}?number=${encodeURIComponent(reqNum)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            statusResult.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                            return;
+                        }
+                        let badgeClass = 'secondary';
+                        if (data.status === 'pending') badgeClass = 'warning';
+                        else if (data.status === 'approved') badgeClass = 'info';
+                        else if (data.status === 'completed') badgeClass = 'success';
+                        else if (data.status === 'rejected') badgeClass = 'danger';
+
+                        statusResult.innerHTML = `
+                            <div class="alert alert-${badgeClass} p-2">
+                                <strong>${data.request_number}</strong><br>
+                                Service: ${data.service}<br>
+                                Status: <span class="badge bg-${badgeClass}">${data.status_display}</span><br>
+                                Requested: ${data.requested_at}
+                            </div>
+                        `;
+                    })
+                    .catch(() => {
+                        statusResult.innerHTML = '<div class="alert alert-danger">Error fetching status.</div>';
+                    });
+            });
+        })();
+    </script>
+</body>
+</html>

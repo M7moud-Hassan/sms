@@ -1,0 +1,42 @@
+<!-- Delete service Modal -->
+<div class="modal fade" id="deleteserviceModal{{ service.pk }}" tabindex="-1" aria-labelledby="deleteserviceModalLabel{{ service.pk }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteserviceModalLabel{{ service.pk }}"><i class="bi bi-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete service <strong>{{ service.name }}</strong>?</p>
+                <p class="text-danger">This action cannot be undone. All cards linked to this service will also be deleted.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'service_delete' service.pk %}" id="deleteserviceForm{{ service.pk }}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    document.getElementById('deleteserviceForm{{ service.pk }}')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = this;
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // if (data.success) {
+                // bootstrap.Modal.getInstance(document.getElementById('deleteserviceModal{{ service.pk }}')).hide();
+                location.reload();
+            // }
+        })
+        .catch(error => console.error('Error:', error));
+         location.reload();
+    });
+</script>

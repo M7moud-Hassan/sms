@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}Card Lookup{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-search"></i> Card Lookup</h2>
+    <a href="{% url 'cards_index' %}" class="btn btn-outline-secondary">Back to Dashboard</a>
+</div>
+
+<!-- Search Form -->
+<form method="get" class="row g-3 bg-light p-3 rounded mb-4">
+    <div class="col-md-4">
+        <label class="form-label">Search By</label>
+        <select name="by" class="form-select">
+            <option value="number" {% if request.GET.by == 'number' %}selected{% endif %}>Card Number</option>
+            <option value="chassis" {% if request.GET.by == 'chassis' %}selected{% endif %}>Chassis Number</option>
+            <option value="vehicle" {% if request.GET.by == 'vehicle' %}selected{% endif %}>Vehicle Number</option>
+            <option value="customer" {% if request.GET.by == 'customer' %}selected{% endif %}>Customer Name</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Search Term</label>
+        <input type="text" name="q" class="form-control" value="{{ request.GET.q }}" placeholder="Enter search term..." required>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Search</button>
+    </div>
+</form>
+
+<!-- Results -->
+{% if request.GET.q %}
+    {% if cards %}
+        <h4>Search Results</h4>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Card Number</th>
+                        <th>Customer</th>
+                        <th>Category</th>
+                        <th>Vehicle</th>
+                        <th>Chassis</th>
+                        <th>Expiry</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for card in cards %}
+                    <tr>
+                        <td><a href="{% url 'card_detail' card.pk %}">{{ card.number_card }}</a></td>
+                        <td>{{ card.customer.name }}</td>
+                        <td>{{ card.category.name|default:"—" }}</td>
+                        <td>{{ card.vehicle_number|default:"—" }}</td>
+                        <td>{{ card.chassis_number|default:"—" }}</td>
+                        <td>{{ card.end_at|date:"Y-m-d" }}</td>
+                        <td>
+                            {% if card.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'card_detail' card.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
+                            <a href="{% url 'card_requests' card.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-ticket-detailed"></i> Requests</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-warning">No cards found matching your search.</div>
+    {% endif %}
+{% endif %}
+
+<!-- Optional: If a single card is selected, show its services and requests -->
+{% if selected_card %}
+<hr>
+<h4>Card Details: {{ selected_card.number_card }}</h4>
+<div class="row">
+    <div class="col-md-6">
+        <h5>Service Quotas</h5>
+        <table class="table table-sm">
+            <thead>
+                <tr><th>Service</th><th>Remaining</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+                {% for quota in selected_card.service_quotas.all %}
+                <tr><td>{{ quota.service.name }}</td><td>{{ quota.remaining_uses }}</td><td>{{ quota.total_provided }}</td></tr>
+                {% empty %}
+                <tr><td colspan="3">No quotas assigned.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <h5>Service Requests</h5>
+        <table class="table table-sm">
+            <thead>
+                <tr><th>Request #</th><th>Service</th><th>Date</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                {% for req in selected_card.service_requests.all %}
+                <tr>
+                    <td><a href="{% url 'request_status' req.pk %}">{{ req.request_number }}</a></td>
+                    <td>{{ req.service.name }}</td>
+                    <td>{{ req.requested_at|date:"Y-m-d" }}</td>
+                    <td><span class="badge bg-{% if req.status == 'pending' %}warning{% elif req.status == 'approved' %}info{% elif req.status == 'inprogress' %}primary{% elif req.status == 'completed' %}success{% else %}danger{% endif %}">{{ req.get_status_display }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4">No requests.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

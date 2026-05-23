@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Service Requests{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-ticket-detailed"></i> Service Requests</h1>
+</div>
+
+<!-- Filter -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="search" class="form-label fw-bold">Search</label>
+                <input type="text" name="q" id="search" class="form-control"
+                       placeholder="Request #, card #, customer, service" value="{{ request.GET.q }}">
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label fw-bold">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Apply</button>
+                <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Requests Table -->
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Request #</th>
+                <th>Card</th>
+                <th>Customer</th>
+                <th>phone</th>
+                <th>Service</th>
+                <th>Requested</th>
+                <th>Status</th>
+                <th>Mission</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in requests %}
+            <tr>
+                <td><a href="{% url 'request_status' req.pk %}">{{ req.request_number }}</a></td>
+                <td>{{ req.card.number_card }}</td>
+                <td>{{ req.card.customer.name }}</td>
+                <td>{{ req.contact_phone|default:"No contact phone" }}</td>
+                <td>{{ req.service.name }}</td>
+                <td>{{ req.requested_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    <span class="badge bg-{% if req.status == 'pending' %}warning{% elif req.status == 'approved' %}info{% elif req.status == 'completed' %}success{% else %}danger{% endif %}">
+                        {{ req.get_status_display }}
+                    </span>
+                </td>
+                <td class="text-center">
+                    {% if req.mission %}
+                        <span class="badge bg-success">Mission #{{ req.mission.id }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#missionModal{{ req.pk }}">
+                            <i class="bi bi-pencil"></i> Edit
+                        </button>
+                    {% else %}
+                        <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#missionModal{{ req.pk }}">
+                            <i class="bi bi-plus-circle"></i> Add Mission
+                        </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% include 'cards/includes/mission_modal.html' with request=req %}
+            {% empty %}
+            <tr><td colspan="7" class="text-center py-4 text-muted">No requests found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+        </li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

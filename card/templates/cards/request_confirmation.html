@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Request Submitted{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-lg border-0 rounded-lg mt-5 text-center">
+            <div class="card-header bg-success text-white">
+                <h3 class="mb-0"><i class="bi bi-check-circle"></i> Request Submitted</h3>
+            </div>
+            <div class="card-body p-5">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 5rem;"></i>
+                <h2 class="mt-3">Your request number is:</h2>
+                <h1 class="display-1 fw-bold text-primary">{{ object.request_number }}</h1>
+                <p class="lead">Service: {{ object.service.name }}</p>
+                <p>You can track the status using this number.</p>
+                <a href="{% url 'request_status' object.pk %}" class="btn btn-primary btn-lg mt-3">
+                    <i class="bi bi-eye"></i> View Status
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

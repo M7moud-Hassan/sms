@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Request {{ request.request_number }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-lg border-0 rounded-lg mt-4">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0"><i class="bi bi-ticket"></i> Request Status</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr><th>Request Number</th><td>{{ request.request_number }}</td></tr>
+                            <tr><th>Service</th><td>{{ request.service.name }}</td></tr>
+                            <tr><th>Card</th><td>{{ request.card.number_card }}</td></tr>
+                            <tr><th>Customer</th><td>{{ request.card.customer.name }}</td></tr>
+                            <tr><th>Requested At</th><td>{{ request.requested_at|date:"Y-m-d H:i" }}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-center p-4">
+                            <h5>Current Status</h5>
+                            <span class="badge bg-{% if request.status == 'pending' %}warning{% elif request.status == 'approved' %}info{% elif request.status == 'completed' %}success{% else %}danger{% endif %} fs-4 p-3">
+                                {{ request.get_status_display }}
+                            </span>
+                            {% if request.completed_at %}
+                                <p class="mt-3">Completed: {{ request.completed_at|date:"Y-m-d H:i" }}</p>
+                            {% endif %}
+                            {% if request.notes %}
+                                <hr>
+                                <p><strong>Notes:</strong> {{ request.notes }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 text-center">
+                    <a href="javascript:window.print()" class="btn btn-outline-secondary"><i class="bi bi-printer"></i> Print</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
