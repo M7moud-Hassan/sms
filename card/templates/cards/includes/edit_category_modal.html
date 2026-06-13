@@ -21,6 +21,10 @@
                         <label for="cat_price_{{ category.pk }}" class="form-label fw-bold">Price*</label>
                         <input type="number" step="0.01" name="price" id="cat_price_{{ category.pk }}" class="form-control" value="{{ category.price }}" required>
                     </div>
+                    <div class="mb-3">
+                        <label for="cat_default_quota_{{ category.pk }}" class="form-label fw-bold">Default Quota per Service</label>
+                        <input type="number" name="default_quota" id="cat_default_quota_{{ category.pk }}" class="form-control" min="1" value="{{ category.default_quota }}">
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

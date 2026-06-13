@@ -17,6 +17,8 @@
                     <tr><th>Category</th><td>{{ card.category.name|default:"—" }}</td></tr>
                     <tr><th>Vehicle</th><td>{{ card.vehicle_number|default:"—" }}</td></tr>
                     <tr><th>Chassis</th><td>{{ card.chassis_number|default:"—" }}</td></tr>
+                    <tr><th>Car Type</th><td>{{ card.type_car|default:"—" }}</td></tr>
+                    <tr><th>Car Color</th><td>{{ card.color_car|default:"—" }}</td></tr>
                     <tr><th>Issued On</th><td>{{ card.created_at|date:"Y-m-d H:i" }}</td></tr>
                     <tr><th>Expires On</th><td>{{ card.end_at|date:"Y-m-d" }}</td></tr>
                     <tr><th>Price</th><td>{{ card.category.price }}</td></tr>
@@ -94,11 +96,13 @@
                                 </td>
                                 <td class="text-center">{{ quota.total_provided }}</td>
                                 <td class="text-center">
-                                    <button type="button" class="btn btn-sm btn-outline-success add-bonus-btn" 
+                                    {% if request.user.is_staff %}
+                                    <button type="button" class="btn btn-sm btn-outline-success add-bonus-btn"
                                             data-service-id="{{ quota.service.id }}"
                                             data-service-name="{{ quota.service.name }}">
                                         <i class="bi bi-plus"></i> Bonus
                                     </button>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -153,6 +157,7 @@
     </div>
 </div>
 
+{% if request.user.is_staff %}
 <!-- Add Bonus Modal (reused for existing services) -->
 <div class="modal fade" id="addBonusModal" tabindex="-1" aria-labelledby="addBonusModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -186,6 +191,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <script>
     (function() {

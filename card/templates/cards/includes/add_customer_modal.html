@@ -36,6 +36,18 @@
 </div>
 <script>
     (function() {
+        const customerModalEl = document.getElementById('addCustomerModal');
+
+        customerModalEl.addEventListener('show.bs.modal', function() {
+            this.style.zIndex = 1065;
+        });
+        customerModalEl.addEventListener('shown.bs.modal', function() {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length > 0) {
+                backdrops[backdrops.length - 1].style.zIndex = 1060;
+            }
+        });
+
         const form = document.getElementById('addCustomerForm');
         if (form) {
             form.addEventListener('submit', function(e) {
@@ -49,7 +61,13 @@
                 .then(data => {
                     if (data.success) {
                         bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')).hide();
-                        location.reload();
+                        document.dispatchEvent(new CustomEvent('customerAdded', {
+                            detail: { id: data.customer_id, name: data.customer_name }
+                        }));
+                        const anyCardModalOpen = document.querySelector('.modal.show[id*="addCard"]');
+                        if (!anyCardModalOpen) {
+                            location.reload();
+                        }
                     } else {
                         alert('Please correct the errors.');
                     }

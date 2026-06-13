@@ -31,16 +31,24 @@
                 </div>
             </div>
             <div class="card-body">
-                <p class="text-muted small">{{ category.description|truncatewords:20|default:"No description" }}</p>
-                <h6 class="fw-bold">Services</h6>
+                {% if category.description %}
+                <p class="text-muted small border-start border-3 border-warning ps-2 mb-3">{{ category.description }}</p>
+                {% endif %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold mb-0">Services</h6>
+                    <span class="badge bg-secondary">Default Quota: {{ category.default_quota }}</span>
+                </div>
                 {% if category.services.all %}
                 <ul class="list-group list-group-flush">
                     {% for service in category.services.all %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <li class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <span class="fw-bold">{{ service.name }}</span>
                             <span class="badge bg-info rounded-pill ms-2">{{ service.get_location_type_display }}</span>
-                            <p class="small text-muted mb-0">{{ service.description|truncatechars:40 }}</p>
+                            {% if service.description %}
+                            <p class="small text-muted mb-0 mt-1">{{ service.description }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editServiceModal{{ service.pk }}">
@@ -49,6 +57,7 @@
                             <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteServiceModal{{ service.pk }}">
                                 <i class="bi bi-trash"></i>
                             </button>
+                        </div>
                         </div>
                     </li>
                     <!-- Include modals for each service -->

@@ -9,25 +9,30 @@
 
 <!-- Filter Form -->
 <form method="get" class="row g-3 bg-light p-3 rounded mb-4">
-    <div class="col-md-3">
+    <div class="col-md-4">
+        <label class="form-label">Search</label>
+        <input type="text" name="q" class="form-control" placeholder="Customer, vehicle, chassis, car type..." value="{{ request.GET.q }}">
+    </div>
+    <div class="col-md-2">
         <label class="form-label">From Date</label>
         <input type="date" name="start" class="form-control" value="{{ request.GET.start }}">
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label class="form-label">To Date</label>
         <input type="date" name="end" class="form-control" value="{{ request.GET.end }}">
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label class="form-label">Category</label>
         <select name="category" class="form-select">
             <option value="">All Categories</option>
             {% for cat in categories %}
-            <option value="{{ cat.pk }}" {% if request.GET.category == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }} (${{ cat.price }})</option>
+            <option value="{{ cat.pk }}" {% if request.GET.category == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-3 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel"></i> Apply Filters</button>
+    <div class="col-md-2 d-flex align-items-end gap-2">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel"></i> Filter</button>
+        <a href="{% url 'card_report' %}" class="btn btn-outline-secondary w-100">Clear</a>
     </div>
 </form>
 
@@ -38,8 +43,12 @@
             <tr>
                 <th>Card Number</th>
                 <th>Customer</th>
+                <th>Vehicle</th>
+                <th>Chassis</th>
+                <th>Car Type</th>
+                <th>Car Color</th>
                 <th>Category</th>
-                <th>Price </th>
+                <th>Price</th>
                 <th>Issue Date</th>
                 <th>Expiry Date</th>
                 <th>Status</th>
@@ -51,6 +60,10 @@
             <tr>
                 <td><a href="{% url 'card_detail' card.pk %}">{{ card.number_card }}</a></td>
                 <td>{{ card.customer.name }}</td>
+                <td>{{ card.vehicle_number|default:"—" }}</td>
+                <td>{{ card.chassis_number|default:"—" }}</td>
+                <td>{{ card.type_car|default:"—" }}</td>
+                <td>{{ card.color_car|default:"—" }}</td>
                 <td>{{ card.category.name|default:"—" }}</td>
                 <td>{{ card.category.price|default:"—" }}</td>
                 <td>{{ card.created_at|date:"Y-m-d" }}</td>
@@ -67,7 +80,7 @@
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="8" class="text-center py-4">No cards found for the selected criteria.</td></tr>
+            <tr><td colspan="12" class="text-center py-4">No cards found for the selected criteria.</td></tr>
             {% endfor %}
         </tbody>
     </table>

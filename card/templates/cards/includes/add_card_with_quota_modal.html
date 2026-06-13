@@ -18,12 +18,17 @@
                                 <h6 class="fw-bold text-primary border-bottom pb-2"><i class="bi bi-credit-card"></i> Card Details</h6>
                                 <div class="mb-2">
                                     <label for="modal_customer" class="form-label fw-semibold">Customer *</label>
-                                    <select name="customer" id="modal_customer" class="form-select" required>
-                                        <option value="">-- Select Customer --</option>
-                                        {% for customer in customers %}
-                                            <option value="{{ customer.pk }}">{{ customer.name }}</option>
-                                        {% endfor %}
-                                    </select>
+                                    <div class="input-group">
+                                        <select name="customer" id="modal_customer" class="form-select" required>
+                                            <option value="">-- Select Customer --</option>
+                                            {% for customer in customers %}
+                                                <option value="{{ customer.pk }}">{{ customer.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal" title="Add new customer">
+                                            <i class="bi bi-person-plus"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="mb-2">
                                     <label for="modal_category" class="form-label fw-semibold">Category</label>
@@ -41,7 +46,19 @@
                                 </div>
                                 <div class="mb-2">
                                     <label for="modal_chassis_number" class="form-label fw-semibold">Chassis Number</label>
-                                    <input type="text" name="chassis_number" id="modal_chassis_number" class="form-control">
+                                    <input type="text" name="chassis_number" id="modal_chassis_number" class="form-control"
+                                           placeholder="17-character VIN" maxlength="17" minlength="17"
+                                           pattern="[0-9A-HJ-NPR-Z]{17}"
+                                           title="17 characters: digits 0–9 and letters A–Z except I, O, Q"
+                                           oninput="this.value=this.value.toUpperCase()">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="modal_type_car" class="form-label fw-semibold">Car Type</label>
+                                    <input type="text" name="type_car" id="modal_type_car" class="form-control" placeholder="e.g. Toyota Camry">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="modal_color_car" class="form-label fw-semibold">Car Color</label>
+                                    <input type="text" name="color_car" id="modal_color_car" class="form-control" placeholder="e.g. White">
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-2">
@@ -61,7 +78,12 @@
                         <div class="col-md-6">
                             <div class="bg-light p-3 rounded">
                                 <h6 class="fw-bold text-success border-bottom pb-2"><i class="bi bi-gift"></i> Service Quotas</h6>
-                                <p class="small text-muted">Set initial quota (default 0). Only services with quota > 0 will be saved.</p>
+                                <p class="small text-muted">
+                                    Initial quota is set to <strong>1</strong> per service.
+                                    {% if not request.user.is_superuser %}
+                                    <span class="text-warning"><i class="bi bi-lock-fill"></i> Quota can only be changed by a super admin.</span>
+                                    {% endif %}
+                                </p>
                                 <div id="modal-service-list-container">
                                     <div class="text-center text-muted py-4">
                                         <i class="bi bi-arrow-up-circle fs-1"></i>
@@ -86,6 +108,19 @@
         const modal = document.getElementById('addCardWithQuotaModal');
         if (!modal) return;
 
+        const endAtInput = document.getElementById('modal_end_at');
+        if (endAtInput && !endAtInput.value) {
+            const d = new Date();
+            d.setFullYear(d.getFullYear() + 1);
+            endAtInput.value = d.toISOString().split('T')[0];
+        }
+        modal.addEventListener('show.bs.modal', function() {
+            const d = new Date();
+            d.setFullYear(d.getFullYear() + 1);
+            endAtInput.value = d.toISOString().split('T')[0];
+        });
+
+        const isSuperAdmin = {{ request.user.is_superuser|yesno:"true,false" }};
         const categorySelect = document.getElementById('modal_category');
         const serviceContainer = document.getElementById('modal-service-list-container');
 
@@ -126,7 +161,7 @@
                                 
                                 <td>
                                     <input type="hidden" name="service_id[]" value="${service.id}">
-                                    <input type="number" name="quota[]" class="form-control form-control-sm" min="0" value="0" style="width: 100px;">
+                                    <input type="number" name="quota[]" class="form-control form-control-sm" min="1" value="${service.default_quota}" style="width: 100px;" ${!isSuperAdmin ? 'readonly title="Only super admins can change the quota"' : ''}>
                                 </td>
                             </tr>
                         `;
@@ -143,6 +178,12 @@
 
         categorySelect.addEventListener('change', function() {
             loadServices(this.value);
+        });
+
+        document.addEventListener('customerAdded', function(e) {
+            const select = document.getElementById('modal_customer');
+            const option = new Option(e.detail.name, e.detail.id, true, true);
+            select.add(option);
         });
 
         // AJAX form submission

@@ -1,8 +1,19 @@
 from django import forms
+from django.core.exceptions import ValidationError
+import re
 
 from drivers.models import Drivers
 from .models import Customer, Card, CategoryCard, RequsetMission, Service, ServiceQuota, ServiceRequest
 from django.forms import inlineformset_factory
+
+VIN_RE = re.compile(r'^[0-9A-HJ-NPR-Z]{17}$')
+
+def validate_vin(value):
+    if value and not VIN_RE.match(value.upper()):
+        raise ValidationError(
+            'VIN must be exactly 17 characters using digits 0–9 and uppercase letters A–Z '
+            'excluding I, O, and Q.'
+        )
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
@@ -17,12 +28,22 @@ class CustomerForm(forms.ModelForm):
 class CardForm(forms.ModelForm):
     class Meta:
         model = Card
-        fields = ['customer', 'category', 'vehicle_number', 'chassis_number', 'end_at', 'is_active']
+        fields = ['customer', 'category', 'vehicle_number', 'chassis_number', 'type_car', 'color_car', 'end_at', 'is_active']
         widgets = {
             'customer': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select', 'data-category-id': ''}),
             'vehicle_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ABC-123'}),
-            'chassis_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Chassis #'}),
+            'chassis_number': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '17-character VIN',
+                'maxlength': '17',
+                'minlength': '17',
+                'pattern': '[0-9A-HJ-NPR-Z]{17}',
+                'title': '17 characters: digits 0–9 and letters A–Z except I, O, Q',
+                'oninput': 'this.value=this.value.toUpperCase()',
+            }),
+            'type_car': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Toyota Camry'}),
+            'color_car': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. White'}),
             'end_at': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
@@ -33,6 +54,8 @@ class CardForm(forms.ModelForm):
         self.fields['category'].queryset = CategoryCard.objects.all().order_by('name')
         self.fields['end_at'].required = False
         self.fields['is_active'].label = "Active card"
+        self.fields['chassis_number'].validators.append(validate_vin)
+        self.fields['chassis_number'].required = False
 ServiceQuotaFormSet = inlineformset_factory(
     Card,
     ServiceQuota,
@@ -51,11 +74,12 @@ ServiceQuotaFormSet = inlineformset_factory(
 class CategoryForm(forms.ModelForm):
     class Meta:
         model = CategoryCard
-        fields = ['name', 'description', 'price']
+        fields = ['name', 'description', 'price', 'default_quota']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'default_quota': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
         }
 class ServiceForm(forms.ModelForm):
     class Meta:
@@ -64,7 +88,7 @@ class ServiceForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
-        'location_type': forms.Select(attrs={'class': 'form-select'}),
+            'location_type': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
         }
 

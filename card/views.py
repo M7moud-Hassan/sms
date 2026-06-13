@@ -111,7 +111,7 @@ class CustomerCreateView(LoginRequiredMixin, CreateView):
     def form_valid(self, form):
         self.object = form.save()
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'success': True})
+            return JsonResponse({'success': True, 'customer_id': self.object.pk, 'customer_name': self.object.name})
         return super().form_valid(form)
 
     def form_invalid(self, form):
@@ -205,16 +205,17 @@ class CardCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)  # saves the card
-        # Process service quotas
         service_ids = self.request.POST.getlist('service_id[]')
         quota_values = self.request.POST.getlist('quota[]')
+        is_superuser = self.request.user.is_superuser
+        category_default = self.object.category.default_quota if self.object.category else 1
         for service_id, quota in zip(service_ids, quota_values):
-            if int(quota) > 0:
-                ServiceQuota.objects.update_or_create(
-                    card=self.object,
-                    service_id=service_id,
-                    defaults={'remaining_uses': quota, 'total_provided': quota}
-                )
+            quota_int = int(quota) if is_superuser else category_default
+            ServiceQuota.objects.update_or_create(
+                card=self.object,
+                service_id=service_id,
+                defaults={'remaining_uses': quota_int, 'total_provided': quota_int}
+            )
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': True})
         return response
@@ -686,8 +687,15 @@ from .models import Service
 def get_services_by_category(request):
     category_id = request.GET.get('category_id')
     if category_id:
-        services = Service.objects.filter(category_id=category_id).values('id', 'name')
-        return JsonResponse({'services': list(services)})
+        try:
+            default_quota = CategoryCard.objects.values_list('default_quota', flat=True).get(pk=category_id)
+        except CategoryCard.DoesNotExist:
+            default_quota = 1
+        services = [
+            {'id': s['id'], 'name': s['name'], 'default_quota': default_quota}
+            for s in Service.objects.filter(category_id=category_id).values('id', 'name')
+        ]
+        return JsonResponse({'services': services})
     return JsonResponse({'services': []})
 
 
@@ -742,6 +750,7 @@ class CardReportView(LoginRequiredMixin, TemplateView):
         start_date = self.request.GET.get('start')
         end_date = self.request.GET.get('end')
         category_id = self.request.GET.get('category')
+        search = self.request.GET.get('q', '').strip()
 
         cards = Card.objects.select_related('customer', 'category').all()
 
@@ -751,11 +760,19 @@ class CardReportView(LoginRequiredMixin, TemplateView):
             cards = cards.filter(created_at__date__lte=end_date)
         if category_id:
             cards = cards.filter(category_id=category_id)
+        if search:
+            cards = cards.filter(
+                Q(customer__name__icontains=search) |
+                Q(vehicle_number__icontains=search) |
+                Q(chassis_number__icontains=search) |
+                Q(type_car__icontains=search) |
+                Q(color_car__icontains=search)
+            )
 
         context['cards'] = cards
         context['categories'] = CategoryCard.objects.all()
         context['total_value'] = sum(card.category.price if card.category else 0 for card in cards)
-        context['active_tab'] ='cards'
+        context['active_tab'] = 'cards'
         return context
 
 

@@ -18,7 +18,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Phone</label>
-                        <input type="text" class="form-control" value="{{ request.phone }}" readonly>
+                        <input type="text" class="form-control" value="{{ request.contact_phone|default:request.card.customer.phone|default:'—' }}" readonly>
                     </div>
                     <!-- Service (read‑only) -->
                     <div class="mb-3">
@@ -72,7 +72,7 @@
                     <div class="mb-3">
                         <label for="cost{{ request.pk }}" class="form-label fw-bold">Cost</label>
                         <input type="number" step="0.01" name="cost" id="cost{{ request.pk }}" class="form-control"
-                               value="{{ request.mission.cost|default:'' }}" required>
+                               value="{{ request.mission.cost|default:'0' }}" required>
                     </div>
 
                     <!-- Notes -->

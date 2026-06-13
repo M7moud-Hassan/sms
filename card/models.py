@@ -12,6 +12,7 @@ class CategoryCard(models.Model):
     name = models.CharField(max_length=100)  # e.g., "SMT ELITE", "SMT PREMIUM"
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # card price
+    default_quota = models.PositiveIntegerField(default=1)
 
     def __str__(self):
         return self.name
@@ -46,6 +47,8 @@ class Card(models.Model):
     end_at = models.DateTimeField(null=True, blank=True)
     vehicle_number = models.CharField(max_length=20, null=True, blank=True)
     chassis_number = models.CharField(max_length=50, null=True, blank=True)
+    type_car = models.CharField(max_length=100, null=True, blank=True)
+    color_car = models.CharField(max_length=50, null=True, blank=True)
     qr_code = models.ImageField(upload_to="cards/qr/", blank=True, null=True)
     category = models.ForeignKey(CategoryCard, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards')
     is_active = models.BooleanField(default=True)

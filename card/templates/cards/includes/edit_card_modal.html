@@ -40,6 +40,14 @@
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
+                            <label for="id_type_car_{{ card.pk }}" class="form-label fw-bold">Car Type</label>
+                            <input type="text" name="type_car" id="id_type_car_{{ card.pk }}" class="form-control" value="{{ card.type_car|default:'' }}" placeholder="e.g. Toyota Camry">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_color_car_{{ card.pk }}" class="form-label fw-bold">Car Color</label>
+                            <input type="text" name="color_car" id="id_color_car_{{ card.pk }}" class="form-control" value="{{ card.color_car|default:'' }}" placeholder="e.g. White">
+                        </div>
+                        <div class="col-md-6 mb-3">
                             <label for="id_end_at_{{ card.pk }}" class="form-label fw-bold">Expiration Date</label>
                             <input type="date" name="end_at" id="id_end_at_{{ card.pk }}" class="form-control" value="{{ card.end_at|date:'Y-m-d' }}">
                         </div>
