@@ -40,6 +40,11 @@ urlpatterns = [
     path('vfilter/<int:id>/', views.vfilter_invoices, name='vfilter_invoices'),
     path('bfilter/<int:id>/', views.bfilter_invoices, name='bfilter_invoices'),
     path('fetch_attachments/', views.fetch_attachments, name='fetch_vattachments'),
+    path('vehicle_reports/<int:id>/<str:date_from>/<str:date_to>/',
+     views.export_vehicle_reports, name='export_vehicle_reports'),
+    path('activities/<int:id>/', views.supplier_activities, name='supplier_activities'),
+    path('procurement_items/', views.procurement_items, name='procurement_items'),
+    path('export_item/<str:date_from>/<str:date_to>/', views.export_item_report, name='export_item_report'),
 ]
 
 

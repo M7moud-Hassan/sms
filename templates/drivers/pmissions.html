@@ -5,6 +5,9 @@
 {% if user.is_authenticated %}
 <head>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<style>
+    .assigned-row td { background-color: #d4edda !important; }
+</style>
 </head>
 <body>
 <div class="input-group mb-3" style="margin: 30px">
@@ -14,8 +17,8 @@
     <div style="height: 50px; border-radius: 0; margin-right: 20px; margin-top: 35px;"></div>
     {% endif %}
 </div>
-<div style="margin: 30px;">
-    <table class="table table-striped table-borderless">
+<div class="table-responsive table-wrap">
+    <table class="table table-striped table-borderless" style="min-width: 1000px;">
   <thead>
     <tr>
       <th>Department</th>
@@ -35,8 +38,14 @@
   <tbody>
   {% if pmissions %}
   {% for pmission in pmissions %}
-  <tr>
-    <td class="align-middle">{{ pmission.customer.name }}</td>
+  <tr class="{% if pmission.mmission %}assigned-row{% endif %}">
+    <td class="align-middle">
+      <select class="change-customer-select form-control" data-pmission-id="{{ pmission.id }}" style="min-width: 150px; border: 1px solid #ced4da; border-radius: 4px;">
+        {% for c in job_customers %}
+        <option value="{{ c.id }}" {% if pmission.customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </td>
     <td class="align-middle">{{ pmission.employee }}</td>
     <td class="align-middle">{{ pmission.date }}</td>
     <td class="align-middle">{{ pmission.from_location }}</td>
@@ -71,7 +80,7 @@
             {% endif %}
         </option>
     </select>
-</td>
+        </td>
     </tr>
     {% endfor %}
   {% else %}
@@ -101,7 +110,10 @@
                             <label style="color: darkblue; font-weight: bold;" for="add-driver">Driver Name</label>
                             <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="add-driver" name="driver" required>
                                 {% for driver in drivers %}
-                                <option>{{ driver.name }}</option>
+                                <option value="{{ driver.name }}"
+                                        data-status="{{ driver.status }}"
+                                        data-from="{{ driver.status_from|date:'Y-m-d' }}"
+                                        data-to="{{ driver.status_to|date:'Y-m-d' }}">{{ driver.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -121,8 +133,8 @@
                         </div>
                         <br>
                         <div class="form-group">
-                        <div class="input-group mb-3" style="margin: 0">
-                            <div style="width: 49.75%;">
+                        <div class="row g-2 mb-3" style="margin: 0">
+                            <div class="col-12 col-sm-6">
                                 <label style="color: darkblue; font-weight: bold;" for="add-receiving_location">Receiving Location</label>
                                 <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;"
                                        type="text" class="form-control" autocomplete="off"
@@ -131,7 +143,7 @@
 
                                 <datalist id="receiving_location_list"></datalist>
                             </div>
-                            <div style="width: 49.75%; margin-left: 0.5%;">
+                            <div class="col-12 col-sm-6">
                                 <label style="color: darkblue; font-weight: bold;" for="add-delivery_location">Delivery Location</label>
                                 <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;"
                                    type="text" class="form-control" autocomplete="off"
@@ -162,6 +174,31 @@
         </div>
     </div>
 
+    <div class="modal fade" id="changeCustomerModal" tabindex="-1" role="dialog" aria-labelledby="changeCustomerModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changeCustomerModalLabel">Change Customer</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <form action="{% url 'change_pmission_customer' 0 %}" method="post" id="changeCustomerForm">
+                {% csrf_token %}
+                <div class="modal-body" style="background-color: whitesmoke;">
+                    <label style="color: darkblue; font-weight: bold;">Customer</label>
+                    <select class="form-select" id="change-customer-select" name="customer" required style="background-color: lightgoldenrodyellow; color: red; font-weight: bold; border: 1px solid #ced4da; border-radius: 4px;">
+                        {% for c in job_customers %}
+                        <option value="{{ c.id }}">{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <!-- Bootstrap Modal -->
 <div class="modal fade" id="otherNotesModal" tabindex="-1" role="dialog" aria-labelledby="otherNotesModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -228,13 +265,55 @@
         });
     };
 
+    // Hide drivers who are unavailable on the chosen Transportation Date
+    const UNAVAILABLE_STATUSES = ['Leaving work', 'On leave', 'On training course', 'On duty but off duty'];
+    const driverSelect = document.getElementById('add-driver');
+
+    const filterDriversByDate = () => {
+        const dateStr = dateInput.value;
+        const selDate = dateStr ? new Date(dateStr) : null;
+        let firstEnabled = null;
+        Array.from(driverSelect.options).forEach(opt => {
+            const status = opt.getAttribute('data-status');
+            const from = opt.getAttribute('data-from');
+            const to = opt.getAttribute('data-to');
+            let unavailable = false;
+            if (selDate && UNAVAILABLE_STATUSES.includes(status)) {
+                const startOk = !from || new Date(from) <= selDate;
+                const endOk = !to || selDate <= new Date(to);
+                unavailable = startOk && endOk;   // date falls inside the range
+            }
+            opt.hidden = unavailable;
+            opt.disabled = unavailable;
+            if (!unavailable && !firstEnabled) firstEnabled = opt;
+        });
+        // If the selected driver just became unavailable, jump to the first available one
+        if (driverSelect.selectedOptions[0] && driverSelect.selectedOptions[0].disabled && firstEnabled) {
+            driverSelect.value = firstEnabled.value;
+        }
+    };
+
     // Attach event listeners
     customerSelect.addEventListener('change', fetchSuggestions);
-    dateInput.addEventListener('change', fetchSuggestions);
+        dateInput.addEventListener('change', fetchSuggestions);
+        dateInput.addEventListener('change', filterDriversByDate);
 
-    // Initialize suggestions when modal is shown
-    $('#addModal').on('shown.bs.modal', fetchSuggestions);
-});
+        // Filter the driver list immediately on page load, so the list is already
+        // correct before the modal is opened — independent of the Bootstrap event.
+        if (!dateInput.value) {
+            dateInput.value = new Date().toISOString().slice(0, 10);  // default to today
+        }
+        filterDriversByDate();
+
+        // Re-filter when the modal is (re)opened, as a backup
+        $('#addModal').on('shown.bs.modal', function () {
+            if (!dateInput.value) {
+                dateInput.value = new Date().toISOString().slice(0, 10);
+            }
+            fetchSuggestions();
+            filterDriversByDate();
+        });
+    });
 
       var today = new Date();
     // Format the date as YYYY-MM-DD
@@ -287,19 +366,47 @@ function updatePmissionMmission(pmissionId, mmissionId, otherNotes) {
         success: function(response) {
             if (response.status === 'success') {
                 var $select = $('select[data-pmission-id="' + pmissionId + '"]');
+                var $row = $select.closest('tr');
 
                 if (otherNotes) {
                     // Update the 'Other' option to display the updated notes
                     $select.find('option[value="other"]').text(otherNotes).prop('selected', true);
+                    $row.removeClass('assigned-row');         // "other" is a note, not a real mission
                 } else if (!mmissionId) {
                     $select.find('option').prop('selected', false); // Deselect all options
+                    $row.removeClass('assigned-row');         // cleared → no mission
                 } else {
                     $select.find('option[value="' + mmissionId + '"]').prop('selected', true);
+                    $row.addClass('assigned-row');            // real mission assigned → highlight
                 }
             }
         },
     });
 }
+$(document).on('click', '.change-customer-button', function () {
+    var id = $(this).data('id');
+    $('#change-customer-select').val(String($(this).data('customer')));
+    var action = "{% url 'change_pmission_customer' 0 %}".replace('0', id);
+    $('#changeCustomerForm').attr('action', action);
+});
+
+$(document).on('change', '.change-customer-select', function () {
+    var pmissionId = $(this).data('pmission-id');
+    var customerId = $(this).val();
+    var $select = $(this);
+    $.ajax({
+        url: "{% url 'change_pmission_customer' 0 %}".replace('0', pmissionId),
+        method: 'POST',
+        data: { customer: customerId, csrfmiddlewaretoken: '{{ csrf_token }}' },
+        success: function (res) {
+            $select.css('border-color', '#28a745');   // brief green confirm
+            setTimeout(function () { $select.css('border-color', '#ced4da'); }, 1000);
+        },
+        error: function () {
+            alert('Failed to change customer');
+        }
+    });
+});
 </script>
 {% else %}
 <head>

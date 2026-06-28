@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 1.2cm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Amiri", "Arial", "DejaVu Sans", sans-serif; color: #222; direction: rtl; }
+
+  .header { border-bottom: 3px solid #1f6feb; padding-bottom: 8px; margin-bottom: 14px; }
+  .header h1 { margin: 0; font-size: 20px; color: #1f6feb; }
+  .header .range { margin: 4px 0 0; font-size: 12px; color: #555; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; page-break-inside: auto; }
+  thead { display: table-header-group; }            /* repeat header on each page */
+  th, td { border: 1px solid #d0d0d0; padding: 7px 9px; text-align: center; }
+  th { background: #1f6feb; color: #fff; font-weight: bold; }
+  tbody tr:nth-child(even) { background: #f4f7fb; }
+  tbody tr { page-break-inside: avoid; }
+  .name { text-align: right; }                       /* names read better right-aligned in RTL */
+  .num  { text-align: left; font-variant-numeric: tabular-nums; }
+
+  .rank-1 td { background: #fff3cd; font-weight: bold; }
+  .rank-2 td { background: #e9ecef; font-weight: bold; }
+  .rank-3 td { background: #f5e6d3; font-weight: bold; }
+
+  tfoot td { font-weight: bold; background: #1f6feb; color: #fff; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>تقرير أعلى العملاء</h1>
+    <p class="range">من {{ date_from }} إلى {{ date_to }}</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th style="width:6%;">#</th><th>العميل</th><th style="width:18%;">عدد المركبات</th><th style="width:22%;">الإيرادات</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="rank-{{ forloop.counter }}">
+        <td>{{ forloop.counter }}</td>
+        <td class="name">{{ r.name }}</td>
+        <td>{{ r.vehicles }}</td>
+        <td class="num">{{ r.revenue|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="2">الإجمالي</td><td>{{ total_vehicles }}</td><td class="num">{{ total_revenue|floatformat:2 }}</td></tr>
+    </tfoot>
+  </table>
+</body>
+</html>

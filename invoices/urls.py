@@ -10,6 +10,7 @@ urlpatterns = [
     path('add_invitem/', views.add_invitem, name="add_invitem"),
     path('edit_invitem/<int:id>/', views.edit_invitem, name="edit_invitem"),
     path('delete_invitem/<int:id>/', views.delete_invitem, name="delete_invitem"),
+    path('export_combined_invoices/', views.export_combined_invoices, name='export_combined_invoices'),
 ]
 
 

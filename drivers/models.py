@@ -5,7 +5,15 @@ import json
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from datetime import datetime
-from customers.models import Customers
+from customers.models import Customers, CostCenter
+
+# Statuses that make a driver unavailable for job assignment
+UNAVAILABLE_STATUSES = [
+    "Leaving work",
+    "On leave",
+    "On training course",
+    "On duty but off duty",
+]
 
 # Create your models here.
 class Drivers(models.Model):
@@ -14,12 +22,23 @@ class Drivers(models.Model):
     username = models.CharField(null=True, max_length=20)
     password = models.CharField(null=True, max_length=20)
     balance = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    status_from = models.DateField(null=True, blank=True)
+    status_to = models.DateField(null=True, blank=True)
     created_by = models.CharField(blank=True, null=True, max_length=50)
     created_at = models.DateTimeField(default=datetime.now)
     class Meta:
         unique_together = ('username', 'password',)
     def __str__(self):
         return self.name
+
+    def is_available(self, on_date=None):
+        on_date = on_date or datetime.now().date()
+        if self.status in UNAVAILABLE_STATUSES:
+            start_ok = self.status_from is None or self.status_from <= on_date
+            end_ok = self.status_to is None or on_date <= self.status_to
+            if start_ok and end_ok:
+                return False
+        return True
 
 class Treasury(models.Model):
     driver = models.ForeignKey(Drivers, on_delete=models.CASCADE, null=True)
@@ -63,6 +82,7 @@ class PMission(models.Model):
     car_color = models.CharField(null=True, blank=True, max_length=50)
     notes = models.CharField(blank=True, null=True, max_length=500)
     another_notes = models.CharField(blank=True, null=True, max_length=500)
+    cost_center = models.ForeignKey(CostCenter, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(default=datetime.now)
     read = models.BooleanField(default=False)
     def __str__(self):

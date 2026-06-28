@@ -7,7 +7,7 @@ class SearchForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={
             'placeholder': 'Search Vehicle Number, Owner',
-            'class': 'form-control',  # Bootstrap class for consistent styling
-            'style': 'width: 250px; height: 50px; margin-top: 10px; margin-left: 70px; text-align: center;'
+            'class': 'form-control search-input',  # styled via CSS instead of inline width
+            'style': 'height: 50px; margin-top: 10px; margin-left: 10px; text-align: center;'
         })
     )

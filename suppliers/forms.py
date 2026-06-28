@@ -8,8 +8,8 @@ class SearchForm(forms.Form):
         widget=forms.TextInput(
             attrs={
                 'placeholder': 'Search any Field',
-                'class': 'form-control',
-                'style': 'height: 50px; width: 300px; text-align: center;'
+                'class': 'form-control search-input',
+                'style': 'height: 50px; text-align: center;'
             }
         )
     )

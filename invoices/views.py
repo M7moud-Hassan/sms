@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Sum, Max
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse, Http404
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -36,8 +36,9 @@ from .models import Invoices, Items, FotarahResponses
 from .helpers import n2w, update_invoice
 from PIL import Image as PILImage
 from django.utils import timezone
+from customers.views import amount_to_arabic_words
 from recipt_vouchers.models import Vouchers, Attachments
-from drivers.models import Drivers, Treasury
+from drivers.models import Drivers, Treasury, PMission, SMission
 from customers.models import Customers, Treasury as Tr
 from drivers.views import update_driver_balance
 from customers.views import update_customer_balance
@@ -165,6 +166,171 @@ def index(request):
                 return redirect('pmissions_index')
             else:
                 return render(request, "invoices/index.html", context)
+
+
+def export_combined_invoices(request):
+    inv_type   = request.POST.get('inv_type', '')   or request.GET.get('inv_type', '')
+    start_date = request.POST.get('start_date', '')  or request.GET.get('start_date', '')
+    end_date   = request.POST.get('end_date', '')    or request.GET.get('end_date', '')
+    query      = (request.POST.get('query', '')      or request.GET.get('query', '')).strip()
+
+    type_map = {'ذمم': 'ذمم', 'نقدي': 'نقدي', 'كليك': 'كليك'}
+    db_type = type_map.get(inv_type)
+    if not db_type:
+        return JsonResponse({'error': 'اختر نوع الفواتير (ذمم / نقدي / كليك).'}, status=400)
+    if not (start_date and end_date):
+        return JsonResponse({'error': 'حدد الفترة الزمنية.'}, status=400)
+
+    invoices = Invoices.objects.filter(type=db_type, date__range=(start_date, end_date))
+    # honor the active search box (same logic as the index view)
+    if query:
+        try:
+            invoices = invoices.filter(Q(number=query) | Q(car__icontains=query))
+        except Exception:
+            invoices = invoices.filter(
+                Q(driver__name__icontains=query) | Q(require_id__name__icontains=query)
+                | Q(car__icontains=query) | Q(notes__icontains=query)
+            )
+    invoices = list(invoices.select_related('require_id', 'driver').order_by('number'))
+    if not invoices:
+        return JsonResponse({'error': 'لا توجد فواتير مطابقة.'}, status=400)
+
+    invoice_ids = [inv.id for inv in invoices]
+
+    # ---- cost centers (bulk, like customers.export_combined_invoice) ----
+    voucher_rows = list(
+        Vouchers.objects.filter(invoice_id__in=invoice_ids)
+        .exclude(car_num__isnull=True).exclude(car_num__exact='')
+        .values('invoice_id', 'car_num')
+    )
+    car_nums = {vr['car_num'].strip() for vr in voucher_rows}
+
+    pm_by_mission_car, pm_by_car = {}, {}
+    if car_nums:
+        for pm in (PMission.objects.filter(car_num__in=car_nums, cost_center__isnull=False)
+                   .values('mmission_id', 'car_num', 'cost_center__name').order_by('id')):
+            cn = (pm['car_num'] or '').strip()
+            if pm['mmission_id'] is not None:
+                pm_by_mission_car[(pm['mmission_id'], cn)] = pm['cost_center__name']
+            pm_by_car[cn] = pm['cost_center__name']
+
+    sm_mission_by_car = {}
+    if car_nums:
+        for sm in (SMission.objects.filter(car_num__in=car_nums, receipt="Invoiced")
+                   .values('car_num', 'mmission_id').order_by('id')):
+            sm_mission_by_car[(sm['car_num'] or '').strip()] = sm['mmission_id']
+
+    cc_by_invoice = {}
+    for vr in voucher_rows:
+        inv_id = vr['invoice_id']
+        if inv_id in cc_by_invoice:
+            continue
+        cn = vr['car_num'].strip()
+        mmid = sm_mission_by_car.get(cn)
+        name_ = pm_by_mission_car.get((mmid, cn)) if mmid is not None else None
+        if not name_:
+            name_ = pm_by_car.get(cn)
+        if name_:
+            cc_by_invoice[inv_id] = name_
+
+    # ---- per-item chassis (vouchers 1:1 by id order) ----
+    chassis_lists = {}
+    for v in (Vouchers.objects.filter(invoice_id__in=invoice_ids)
+              .order_by('id').values('invoice_id', 'car_num')):
+        chassis_lists.setdefault(v['invoice_id'], []).append((v['car_num'] or '').strip())
+
+    items_by_invoice = {}
+    for it in (Items.objects.filter(number_id__in=invoice_ids).order_by('id')
+               .values('number_id', 'udinar', 'ufils', 'qty', 'description', 'adinar', 'afils')):
+        items_by_invoice.setdefault(it['number_id'], []).append(it)
+
+    ordered_invoices = sorted(
+        invoices, key=lambda inv: (inv.date or datetime.max.date(), inv.number or 0, inv.id)
+    )
+
+    rows = []
+    for inv in ordered_invoices:
+        inv_items = items_by_invoice.get(inv.id, [])
+        inv_cars = chassis_lists.get(inv.id, [])
+        cust_name = inv.require_id.name if inv.require_id else ''
+        for idx, it in enumerate(inv_items):
+            rows.append({
+                'chassis': inv_cars[idx] if idx < len(inv_cars) else '',
+                'cost_center': cc_by_invoice.get(inv.id, ''),
+                'qty': it['qty'], 'description': it['description'],
+                'invoice_number': inv.number, 'customer_name': cust_name,
+                'adinar': it['adinar'], 'afils': it['afils'],
+            })
+
+    if not rows:
+        return JsonResponse({'error': 'الفواتير المحددة لا تحتوي على بنود.'}, status=400)
+
+    # ---- 10,000-item cap ----
+    ITEM_START = 19
+    LAST_ITEM_ROW = 10018
+    MAX_ITEMS = LAST_ITEM_ROW - ITEM_START + 1   # 10000
+    if len(rows) > MAX_ITEMS:
+        return JsonResponse(
+            {'error': f'عدد البنود {len(rows)} يتجاوز الحد الأقصى {MAX_ITEMS}. '
+                      f'الرجاء تضييق الفترة الزمنية.'},
+            status=400
+        )
+
+    # ---- totals ----
+    total_dinar = sum(int(inv.dinar or 0) for inv in invoices)
+    total_fils = sum(int(inv.fils or 0) for inv in invoices)
+    total_dinar += total_fils // 1000
+    total_fils = total_fils % 1000
+
+    # ---- fill template ----
+    source_excel_path = os.path.join(settings.BASE_DIR, 'excel_templates', 'combined_invoice2.xlsx')
+    wb = load_workbook(source_excel_path)
+    ws = wb.active
+
+    ws['G7'] = inv_type                                   
+    ws['K9'] = datetime.now().strftime('%Y-%m-%d')
+
+    next_row = ITEM_START
+    for idx, r in enumerate(rows, start=ITEM_START):
+        ws.cell(row=idx, column=1,  value=r['adinar'])          # A price dinar
+        ws.cell(row=idx, column=2,  value=r['afils'])           # B price fils
+        ws.cell(row=idx, column=3,  value=r['chassis'])         # C chassis
+        ws.cell(row=idx, column=4,  value=r['cost_center'])     # D cost/service center
+        ws.cell(row=idx, column=5,  value=r['qty'])             # E qty
+        ws.cell(row=idx, column=6,  value=r['description'])     # F..I description
+        ws.cell(row=idx, column=10, value=r['invoice_number'])  # J invoice number
+        ws.cell(row=idx, column=11, value=r['customer_name'])   # K customer name
+        next_row = idx + 1
+
+    for hide_r in range(next_row, LAST_ITEM_ROW + 1):
+        ws.row_dimensions[hide_r].hidden = True
+
+    ws.column_dimensions['C'].width = 44
+
+    ws['A10020'] = total_dinar
+    ws['B10020'] = total_fils
+    ws['C10019'] = amount_to_arabic_words(total_dinar, total_fils)
+
+    output_excel_path = os.path.join(settings.MEDIA_ROOT, 'combined_invoices_report.xlsx')
+    wb.save(output_excel_path)
+    try:
+        output_pdf_path = os.path.splitext(output_excel_path)[0] + '.pdf'
+        subprocess.run(["pkill", "-f", "soffice.bin"], check=False)
+        subprocess.run(["libreoffice", "--headless", "--convert-to", "pdf",
+                        output_excel_path, '--outdir', os.path.dirname(output_pdf_path)],
+                       check=True, timeout=180)
+        if os.path.exists(output_pdf_path):
+            with open(output_pdf_path, 'rb') as f:
+                resp = HttpResponse(f.read(), content_type='application/pdf')
+                resp['Content-Disposition'] = 'attachment; filename="Combined Invoices.pdf"'
+            for p in (output_excel_path, output_pdf_path):
+                if os.path.exists(p):
+                    os.remove(p)
+            return resp
+        raise Http404("PDF file not found")
+    except Exception as e:
+        print("Error:", e)
+        return JsonResponse({'error': f'PDF conversion failed: {str(e)}'}, status=500)
 
 def invoice_details(request, number):
     invoice = get_object_or_404(Invoices, number=number)
@@ -591,8 +757,8 @@ def export_invoice(request, number):
             # Position at cell H5 (adjust as needed)
             ws.add_image(qr_excel_img, 'H5')
             # Add note about duplicate if applicable
-            if duplicate_error and use_stored_qr:
-                ws['H36'] = "QR code from previous submission"
+            #if duplicate_error and use_stored_qr:
+                #ws['H36'] = "QR code from previous submission"
         except Exception as e:
             print(f"Failed to add QR code to Excel: {str(e)}")
 

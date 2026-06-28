@@ -40,13 +40,13 @@ def index(request):
         end_date = request.GET['end_date']
         vouchers = Vouchers.objects.all()
         if request.GET['inlineRadioOptions'] == "option1":
-            vouchers = Vouchers.objects.filter(Q(recipient_to_name__isnull=True) & Q(recipient_from_name__isnull=False)).order_by('receipt_from_time')
+            vouchers = Vouchers.objects.filter(Q(recipient_to_name__isnull=True) & Q(recipient_from_name__isnull=False)).select_related('car_owner', 'invoice').order_by('receipt_from_time')
             options = "option1"
         elif request.GET['inlineRadioOptions'] == "option2":
-            vouchers = Vouchers.objects.filter(Q(recipient_to_name__isnull=False) & Q(invoice__exported__isnull=True)).order_by('receipt_to_time')
+            vouchers = Vouchers.objects.filter(Q(recipient_to_name__isnull=False) & Q(invoice__exported__isnull=True)).select_related('car_owner', 'invoice').order_by('receipt_to_time')
             options = "option2"
         elif request.GET['inlineRadioOptions'] == "option3":
-            vouchers = Vouchers.objects.filter(Q(invoice__exported__isnull=False) & Q(invoice__date__range=(start_date, end_date))).order_by('receipt_to_time')
+            vouchers = Vouchers.objects.filter(Q(invoice__exported__isnull=False) & Q(invoice__date__range=(start_date, end_date))).select_related('car_owner', 'invoice').order_by('receipt_to_time')
             options = "option3"
         if form.is_valid() and (options == "option1" or options == "option2" or options == "option3"):
             query = form.cleaned_data['query']
@@ -60,17 +60,20 @@ def index(request):
         vouchers = vouchers.prefetch_related('attachments_set')
         adjusted_vouchers = []
         for voucher in vouchers:
-            voucher.receipt_from_time = localtime(voucher.receipt_from_time, amman_tz)
-            voucher.receipt_to_time = localtime(voucher.receipt_to_time, amman_tz)
-            voucher.adjusted_receipt_from_time = voucher.receipt_from_time
-            voucher.adjusted_receipt_to_time = voucher.receipt_to_time
-            time_diff = voucher.receipt_from_time.utcoffset().total_seconds() / 3600
             if voucher.receipt_from_time:
-                voucher.adjusted_receipt_from_time += timedelta(hours=time_diff)
+                voucher.adjusted_receipt_from_time = localtime(
+                    voucher.receipt_from_time, amman_tz
+                ).strftime('%Y-%m-%d %I:%M %p')
+            else:
+                voucher.adjusted_receipt_from_time = None
             if voucher.receipt_to_time:
-                voucher.adjusted_receipt_to_time += timedelta(hours=time_diff)
+                voucher.adjusted_receipt_to_time = localtime(
+                    voucher.receipt_to_time, amman_tz
+                ).strftime('%Y-%m-%d %I:%M %p')
+            else:
+                voucher.adjusted_receipt_to_time = None
             adjusted_vouchers.append(voucher)
-        number_of_vehicles = vouchers.count()
+        number_of_vehicles = len(adjusted_vouchers)
     context = {
         'active_tab': 'recipt_vouchers',
         'vouchers': adjusted_vouchers,

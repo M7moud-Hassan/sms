@@ -154,6 +154,11 @@
         </div>
     </form>
 </div>
+<div id="combined-bar" style="display:none; margin: 0 25px 10px;">
+  <button id="combined-btn" type="button" class="btn btn-success">
+    <i class="fas fa-file-pdf"></i> Combined Invoice
+  </button>
+</div>
 <div id="itable1" class="scrollable-div" style="margin: 25px;">
 <table id="myTable">
   <thead>
@@ -337,6 +342,28 @@
             </div>
         </div>
     </div>
+
+    <!-- Reusable alert modal -->
+    <div class="modal fade" id="appAlertModal" tabindex="-1" role="dialog" aria-labelledby="appAlertTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="appAlertTitle">
+            <i class="fas fa-circle-exclamation text-warning me-2"></i> Notice
+            </h5>
+            <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p id="appAlertMessage" class="mb-0"></p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+        </div>
+        </div>
+    </div>
+    </div>
 {% if options == "option1" %}
 <script>
 var radioButton = document.getElementById('inlineRadio1');
@@ -367,13 +394,7 @@ var radioButton = document.getElementById('inlineRadio5');
 radioButton.checked = true;
 </script>
 {% endif %}
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
     <!-- Include Bootstrap JS and dependencies -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
@@ -462,77 +483,6 @@ radioButton.checked = true;
             });
         });
     });
-    document.addEventListener('DOMContentLoaded', function() {
-  fetch('/drivers/fetch-pmissions/')
-    .then(response => response.json())
-    .then(data => {
-      const pmissions = data.pmissions;
-      const toastContainer = document.getElementById('toast-container');
-      pmissions.forEach(function(mission) {
-        const toastHTML = `
-          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-              <strong class="mr-auto">${mission.customer_name}</strong>
-            </div>
-            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-              From: ${mission.from_location}<br>
-              To: ${mission.to_location}<br>
-              Vehicle: ${mission.car_type} (${mission.car_num})
-            </div>
-          </div>
-        `;
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-        // Add click event to the toast to mark as read and close the toast
-        const toastElement = document.getElementById(`toast-${mission.id}`);
-        toastElement.addEventListener('click', function() {
-          markAsRead(mission.id);
-          $(toastElement).toast('hide'); // Close the toast after marking as read
-        });
-      });
-
-      // Initialize toast with autohide set to false
-      $('.toast').toast({
-        autohide: false
-      }).toast('show');  // Display all toasts without auto-hiding
-    })
-    .catch(error => {
-      console.error('Error fetching PMissions:', error);
-    });
-
-  // Mark the mission as read when clicked
-  function markAsRead(missionId) {
-    fetch(`/drivers/mark-as-read/${missionId}/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-        'Content-Type': 'application/json'
-      },
-    }).then(response => response.json())
-      .then(data => {
-        console.log(`Mission ${missionId} marked as read`);
-      })
-      .catch(error => {
-        console.error('Error marking as read:', error);
-      });
-  }
-
-  // Function to get the CSRF token
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-});
 
     function setDynamicHeight() {
         // Get the screen height
@@ -596,6 +546,69 @@ $(document).on('click', '.edit-button', function() {
     var action = $('#editForm').attr('action').replace('0', id);
     $('#editForm').attr('action', action);
 });
+
+(function () {
+        function invTypeOf(v) {
+            return v === 'option2' ? 'ذمم' : v === 'option3' ? 'نقدي' : v === 'option4' ? 'كليك' : '';
+        }
+        function selectedOption() {
+            const r = document.querySelector('input[name="inlineRadioOptions"]:checked');
+            return r ? r.value : '';
+        }
+        function syncVisibility() {
+            const show = ['option2', 'option3', 'option4'].includes(selectedOption());
+            const bar = document.getElementById('combined-bar');
+            if (bar) bar.style.display = show ? 'block' : 'none';
+        }
+        function getCookie(name) {
+            const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return v ? v.pop() : '';
+        }
+        function showAlert(message) {
+            document.getElementById('appAlertMessage').textContent = message;
+            // Bootstrap 4 (jQuery) — matches your existing data-dismiss modals
+            $('#appAlertModal').modal('show');
+        }
+        function initCombined() {
+            syncVisibility();
+            const btn = document.getElementById('combined-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                const invType = invTypeOf(selectedOption());
+                if (!invType) { showAlert('Please choose an invoice type (ذمم / نقدي / كليك).'); return; }
+                const q = document.querySelector('input[name="query"]');
+                const original = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+                fetch("{% url 'export_combined_invoices' %}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCookie('csrftoken') },
+                    body: 'inv_type='   + encodeURIComponent(invType) +
+                          '&start_date=' + encodeURIComponent(document.getElementById('start_date').value) +
+                          '&end_date='   + encodeURIComponent(document.getElementById('end_date').value) +
+                          '&query='      + encodeURIComponent(q ? q.value : ''),
+                }).then(async (resp) => {
+                    if (resp.ok) {
+                        const blob = await resp.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = 'Combined Invoices.pdf';
+                        document.body.appendChild(a); a.click(); a.remove();
+                        URL.revokeObjectURL(url);
+                    } else {
+                        const data = await resp.json().catch(() => ({ error: 'Could not generate the combined invoice.' }));
+                        showAlert(data.error || 'Could not generate the combined invoice.');
+                    }
+                }).finally(() => { btn.disabled = false; btn.innerHTML = original; });
+            });
+        }
+        // run now if DOM is ready, otherwise wait
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initCombined);
+        } else {
+            initCombined();
+        }
+    })();
 </script>
 </body>
 {% if result != "ok" %}

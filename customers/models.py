@@ -45,3 +45,10 @@ class Customer_Vehicles(models.Model):
     car_color = models.CharField(null=True, blank=True, max_length=50)
     def __str__(self):
         return self.customer.name
+
+class CostCenter(models.Model):
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name='cost_centers')
+    name = models.CharField(max_length=200)
+    created_at = models.DateTimeField(default=datetime.now)
+    def __str__(self):
+        return self.name

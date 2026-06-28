@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Sum, Max, Q, F, Value as V, CharField, DecimalField
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse, Http404
 from django.urls import reverse
 import os
 import openpyxl
@@ -14,7 +14,6 @@ from django.conf import settings
 import subprocess
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse
 from django.contrib import messages
 import tempfile
 from datetime import datetime, date
@@ -294,7 +293,12 @@ def page2_1(request, number):
         serializer = Vouchers2Serializer(vouchers, data=data)  # Use partial=True for partial updates
         if serializer.is_valid():
             serializer.save()
-            item = SMission.objects.filter(Q(car_num=vouchers.car_num) & Q(receipt="Assigned")).first()
+            # Scope to THIS driver's mission, not any Assigned row with this plate —
+            # a reused chassis can be Assigned on another driver's older mission too.
+            item = (SMission.objects.filter(
+                        Q(car_num=vouchers.car_num) & Q(receipt="Assigned")
+                        & Q(mmission__driver__name=vouchers.driver_name)
+                    ).order_by('-id').first())
             if item:
                 item.receipt = "Received"
                 item.save()
@@ -414,7 +418,12 @@ def page3_1(request, number):
             serializer = Vouchers32Serializer(vouchers, data=data)
             if serializer.is_valid():
                 serializer.save()
-                item = SMission.objects.filter(Q(car_num=vouchers.car_num) & Q(receipt="Received")).first()
+                # Scope to THIS driver's mission so a reused chassis can't flip
+                # another driver's Received row to Delivered.
+                item = (SMission.objects.filter(
+                            Q(car_num=vouchers.car_num) & Q(receipt="Received")
+                            & Q(mmission__driver__name=vouchers.driver_name)
+                        ).order_by('-id').first())
                 if item:
                     item.receipt = "Delivered"
                     item.save()
@@ -701,7 +710,11 @@ def export_invoice(request, phone, driver_name, vehicle_number):
             voucher.save()
             from_location = voucher.receipt_from_location
             to_location = voucher.receipt_to_location
-            item = SMission.objects.filter(Q(car_num=voucher.car_num) & Q(receipt="Delivered") & Q(mmission__driver__name=decoded_driver_name)).first()
+            cost_center_name = ""
+            item = (SMission.objects.filter(
+                        Q(car_num=voucher.car_num) & Q(receipt="Delivered")
+                        & Q(mmission__driver__name=decoded_driver_name)
+                    ).order_by('-id').first())
             if item:
                 item.receipt = "Invoiced"
                 item.save()
@@ -710,6 +723,8 @@ def export_invoice(request, phone, driver_name, vehicle_number):
                 if pmission:
                     from_location = pmission.from_location
                     to_location = pmission.to_location
+                    if pmission.cost_center:
+                        cost_center_name = pmission.cost_center.name
                 else:
                     from_location = mission.from_location
                     to_location = mission.to_location
@@ -720,6 +735,8 @@ def export_invoice(request, phone, driver_name, vehicle_number):
                 new_invoice.samount = mission.scost
                 new_invoice.save()
             description = f"نقل مركبة للعميل نوع {voucher.car_mark} لون {voucher.car_color} من {from_location} إلى {to_location}"
+            if cost_center_name:
+                description = f"{description} - {cost_center_name}"
             description = f"\u202B{description}\u202C"
             adinar = udinar = int(amount / items_count)
             afils = ufils = int(round(((amount / items_count) - udinar) * 100))

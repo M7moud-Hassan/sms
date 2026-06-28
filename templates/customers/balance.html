@@ -7,6 +7,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
+<style>
+  #ajax-loader { display:none; position:fixed; inset:0; background:rgba(255,255,255,0.6);
+                 z-index:2000; align-items:center; justify-content:center; }
+  #ajax-loader .spin { width:3rem; height:3rem; border:4px solid #cfe2ff; border-top-color:#0d6efd;
+                 border-radius:50%; animation:ajx 0.8s linear infinite; }
+  @keyframes ajx { to { transform:rotate(360deg); } }
+</style>
+<div id="ajax-loader"><div class="spin"></div></div>
+<div id="exportModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:2100; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; max-width:480px; width:90%; padding:20px;">
+    <h5 style="margin-top:0;">Select reports to export</h5>
+    <div style="display:flex; flex-direction:column; gap:8px; margin:14px 0;">
+      <label><input type="checkbox" value="account_statement" checked> Account statement</label>
+      <label><input type="checkbox" value="vehicles" checked> Transported vehicles</label>
+      <label><input type="checkbox" value="transactions" checked> Transport transactions (detailed)</label>
+      <label><input type="checkbox" value="timeline" checked> Task timeline</label>
+      <label><input type="checkbox" value="invoices" checked> Customer invoices</label>
+      <label><input type="checkbox" value="outstanding" checked> Outstanding invoices</label>
+      <label><input type="checkbox" value="paid" checked> Paid invoices</label>
+    </div>
+    <div style="text-align:right;">
+      <button type="button" id="cancelExportBtn" class="btn btn-light">Cancel</button>
+      <button type="button" id="confirmExportBtn" class="btn btn-primary">Download</button>
+    </div>
+  </div>
+</div>
 <div class="card" style="margin-top: 0; border-top: none;">
     <div class="card-body" style="padding: 5px;">
     <div class="container mb-0 mt-0">
@@ -18,9 +44,9 @@
                 <a href="{% url 'customers_index' %}" class="btn btn-light text-capitalize border-0" data-mdb-ripple-init data-mdb-ripple-color="dark">
                     <i class="bi bi-arrow-left"></i> Back
                 </a>
-                <a id="export-btn" href="{% url 'export_ctreasury' id 0 1 %}" class="btn btn-light text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="dark">
-                    <i class="fas fa-file-archive text-primary"></i> Export
-                </a>
+                <button type="button" id="export-btn" class="btn btn-light text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="dark">
+                    <i class="fas fa-file-invoice text-primary"></i> Reports
+                </button>
             </div>
         </div>
         </div>
@@ -62,15 +88,27 @@
 <div class="input-group mb-3" style="margin: 0 15px 30px 30px; height: 50%;">
 <div class="scrollable-div" style="margin: 30px; width: 40%;">
 <div class="input-group mb-3">
-<span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">From</span>
+<span hidden="hidden" style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">From</span>
 <input type="date" id="date_from" name="start_date" class="form-control" style="text-align: center; margin-right: 3%; height: 50px;" aria-label="Date">
-<span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">To</span>
+<span hidden="hidden" style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">To</span>
 <input type="date" id="date_to" name="end_date" class="form-control" style="text-align: center; height: 50px;" aria-label="Date">
+<select id="cost_center" class="form-select" style="text-align: center; margin-left: 3%; height: 50px; max-width: 220px;" aria-label="Cost Center">
+    <option value="">كل مراكز التكلفة</option>
+    {% for cc in cost_centers %}
+    <option value="{{ cc.id }}">{{ cc.name }}</option>
+    {% endfor %}
+</select>
 <input type="hidden" id="customer_id" value="{{ id }}">
+</div>
+<div id="combined-bar" style="display:none; margin-bottom:10px;">
+  <button type="button" id="combined-invoice-btn" class="btn btn-success">
+    <i class="fas fa-file-pdf"></i> Combined Invoice (<span id="sel-count">0</span>)
+  </button>
 </div>
     <table class="table align-middle mb-0 bg-white">
   <thead style="background-color: lightgrey;">
     <tr>
+      <th><input type="checkbox" id="select-all-invoices"></th>
       <th>Invoice Number</th>
       <th>Driver Name</th>
       <th>Amount</th>
@@ -161,90 +199,38 @@
             </div>
         </div>
     </div>
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
+    <!-- Reusable alert modal -->
+    <div class="modal fade" id="appAlertModal" tabindex="-1" role="dialog" aria-labelledby="appAlertTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="appAlertTitle">
+            <i class="fas fa-exclamation-circle text-warning mr-2"></i> Notice
+            </h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p id="appAlertMessage" class="mb-0"></p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-dismiss="modal">OK</button>
+        </div>
+        </div>
+    </div>
+    </div>
+
     <!-- Include Bootstrap JS and dependencies -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-  fetch('/drivers/fetch-pmissions/')
-    .then(response => response.json())
-    .then(data => {
-      const pmissions = data.pmissions;
-      const toastContainer = document.getElementById('toast-container');
-      pmissions.forEach(function(mission) {
-        const toastHTML = `
-          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-              <strong class="mr-auto">${mission.customer_name}</strong>
-            </div>
-            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-              From: ${mission.from_location}<br>
-              To: ${mission.to_location}<br>
-              Vehicle: ${mission.car_type} (${mission.car_num})
-            </div>
-          </div>
-        `;
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-        // Add click event to the toast to mark as read and close the toast
-        const toastElement = document.getElementById(`toast-${mission.id}`);
-        toastElement.addEventListener('click', function() {
-          markAsRead(mission.id);
-          $(toastElement).toast('hide'); // Close the toast after marking as read
-        });
-      });
-
-      // Initialize toast with autohide set to false
-      $('.toast').toast({
-        autohide: false
-      }).toast('show');  // Display all toasts without auto-hiding
-    })
-    .catch(error => {
-      console.error('Error fetching PMissions:', error);
-    });
-
-  // Mark the mission as read when clicked
-  function markAsRead(missionId) {
-    fetch(`/drivers/mark-as-read/${missionId}/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-        'Content-Type': 'application/json'
-      },
-    }).then(response => response.json())
-      .then(data => {
-        console.log(`Mission ${missionId} marked as read`);
-      })
-      .catch(error => {
-        console.error('Error marking as read:', error);
-      });
-  }
-
-  // Function to get the CSRF token
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
+        function showAlert(message) {
+            document.getElementById('appAlertMessage').textContent = message;
+            $('#appAlertModal').modal('show');
         }
-      }
-    }
-    return cookieValue;
-  }
-});
-
         // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
         const inactivityTime = 300000;
         // Variable to hold the inactivity timer
@@ -277,6 +263,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     let date_from = document.getElementById('date_from');
     let date_to = document.getElementById('date_to');
+    let cost_center = document.getElementById('cost_center');
     let invoicesTableBody = document.getElementById('invoices_body');
     let treasuryTableBody = document.getElementById('treasury_body');
     let totalInvoicedCard = document.getElementById('total_invoiced');
@@ -284,12 +271,35 @@ document.addEventListener('DOMContentLoaded', function () {
     let requiredAmountCard = document.getElementById('required_amount');
     let customerId = document.getElementById('customer_id').value;
     let exportBtn = document.getElementById('export-btn');
+    let filterTimer;
+    let currentXhr = null;
     // Set default dates and fetch data initially
     setDefaultDates();
-    date_from.oninput = date_to.onchange = function() {
+    function scheduleFilter() {
+        // Reset combined invoice selection when date range changes
+        var sa = document.getElementById('select-all-invoices');
+        if (sa) {
+            sa.checked = false;
+            sa.indeterminate = false;
+        }
+        // Clear all checkboxes manually and reset count
+        document.querySelectorAll('.invoice-check').forEach(cb => cb.checked = false);
+        var selCount = document.getElementById('sel-count');
+        if (selCount) {
+            selCount.textContent = '0';
+        }
+        var combinedBar = document.getElementById('combined-bar');
+        if (combinedBar) {
+            combinedBar.style.display = 'none';
+        }
+        
         updateExportUrl();
-        filterData();
-    };
+        clearTimeout(filterTimer);
+        filterTimer = setTimeout(filterData, 400);
+    }
+    // 'change' (not 'input') = fires once the date is committed, not per keystroke/step
+    date_from.onchange = date_to.onchange = scheduleFilter;
+    cost_center.onchange = filterData;
     function setDefaultDates() {
         let endDate = new Date();
         let startDate = new Date(endDate);
@@ -303,71 +313,132 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateExportUrl() {
         let dateFrom = date_from.value;
         let dateTo = date_to.value;
-        let exportUrl = `/customers/export/${encodeURIComponent(customerId)}/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/`;
-        exportBtn.href = exportUrl; // Set the href attribute to the constructed URL
+        exportBtn.dataset.baseUrl = `/customers/export/${encodeURIComponent(customerId)}/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/`;
     }
+
+    // ---- export report picker + download ----
+    let exportModal = document.getElementById('exportModal');
+    exportBtn.addEventListener('click', () => { exportModal.style.display = 'flex'; });
+    document.getElementById('cancelExportBtn').addEventListener('click', () => { exportModal.style.display = 'none'; });
+
+    document.getElementById('confirmExportBtn').addEventListener('click', function () {
+        let selected = Array.from(exportModal.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        if (selected.length === 0) { showAlert('Please select at least one report.'); return; }
+        let url = exportBtn.dataset.baseUrl + '?reports=' + selected.join(',');
+
+        let btn = this, original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+        document.cookie = 'export_download_done=; Max-Age=0; path=/';
+
+        let iframe = document.createElement('iframe');
+        iframe.style.display = 'none'; iframe.src = url;
+        document.body.appendChild(iframe);
+
+        let poll = setInterval(function () {
+            if (document.cookie.includes('export_download_done=true')) {
+                clearInterval(poll);
+                document.cookie = 'export_download_done=; Max-Age=0; path=/';
+                btn.disabled = false; btn.innerHTML = original;
+                exportModal.style.display = 'none'; iframe.remove();
+            }
+        }, 500);
+        setTimeout(function () {                 // safety fallback
+            if (!btn.disabled) return;
+            clearInterval(poll); btn.disabled = false; btn.innerHTML = original; iframe.remove();
+        }, 120000);
+    });
     function filterData() {
         var dateFrom = date_from.value;
         var dateTo = date_to.value;
         if (dateFrom && dateTo && customerId) {
-            $.ajax({
+            if (currentXhr) { currentXhr.abort(); }   // drop the previous request
+            document.getElementById('ajax-loader').style.display = 'flex';
+            currentXhr = $.ajax({
                 url: `/customers/filter/${customerId}/`,
                 method: 'GET',
-                data: {
-                    date_from: dateFrom,
-                    date_to: dateTo,
-                },
+                data: { date_from: dateFrom, date_to: dateTo, cost_center: cost_center.value },
                 success: function(response) {
                     displayInvoices(response.invoices);
                     displayTreasury(response.treasury);
                     updateTotals(response.total_invoiced, response.total_treasury, response.required_amount);
                 },
                 error: function(xhr, status, error) {
-                    console.error('Error fetching data:', error);
+                    if (status !== 'abort') {
+                        console.error('Error fetching data:', error);
+                        // don't leave the previous range's rows/count on screen
+                        invoicesTableBody.innerHTML = '';
+                        var sa = document.getElementById('select-all-invoices');
+                        if (sa) sa.checked = false;
+                        refreshCombinedBar();
+                    }
+                },
+                complete: function(xhr, status) {
+                    // an aborted request was superseded by a newer one — keep the loader up
+                    if (status !== 'abort') {
+                        document.getElementById('ajax-loader').style.display = 'none';
+                    }
                 }
             });
         }
     }
     function displayInvoices(invoices) {
-        invoicesTableBody.innerHTML = '';
-        invoices.forEach(function(invoice) {
-            var driverName = invoice.driver__name || 'N/A';
-            var formattedDate = formatDate(invoice.created_at);
-            var row = `
-                <tr class="custom-row">
-                    <td>${invoice.number}</td>
-                    <td>${driverName}</td>
-                    <td>${invoice.tamount}</td>
-                    <td>${formattedDate}</td>
-                </tr>`;
-            invoicesTableBody.innerHTML += row;
-        });
+    console.log('displayInvoices called, count =', invoices.length);
+    var rows = invoices.map(function(invoice) {
+        var driverName = invoice.driver__name || 'N/A';
+        var formattedDate = formatDate(invoice.created_at);
+        return `
+            <tr class="custom-row">
+                <td><input type="checkbox" class="invoice-check" value="${invoice.number}"></td>
+                <td>${invoice.number}</td>
+                <td>${driverName}</td>
+                <td>${invoice.tamount}</td>
+                <td>${formattedDate}</td>
+            </tr>`;
+    });
+    invoicesTableBody.innerHTML = rows.join('');
+    
+    // Force reset of all checkbox states
+    var sa = document.getElementById('select-all-invoices');
+    if (sa) {
+        sa.checked = false;
+        sa.indeterminate = false;
+    }
+    
+    // Explicitly set count to 0 and hide the bar
+    var selCount = document.getElementById('sel-count');
+    if (selCount) {
+        selCount.textContent = '0';
+    }
+    var combinedBar = document.getElementById('combined-bar');
+    if (combinedBar) {
+        combinedBar.style.display = 'none';
+    }
     }
 
     function displayTreasury(treasury) {
-        treasuryTableBody.innerHTML = '';
-        treasury.forEach(function(entry) {
-            var formattedDate = formatDate(entry.created_at);
-            var row = `
-                <tr class="custom-row">
-                    <td>${entry.number}</td>
-                    <td>${entry.inumber}</td>
-                    <td>${entry.amount}</td>
-                    <td>${entry.payment}</td>
-                    <td>${formattedDate}</td>
-                    {% if user.is_staff %}
-                    <td>
-                        <button style="width: 70px; height: 36px;" class="btn btn-sm btn-primary edit-button"
-                            data-toggle="modal" data-target="#editModal" data-id="${entry.id}"
-                            data-amount="${entry.amount}" data-method="${entry.payment}">Edit</button>
-                        <button style="width: 70px; height: 36px;" class="btn btn-sm btn-danger delete-button"
-                            data-toggle="modal" data-target="#deleteModal" data-id="${entry.id}">Delete</button>
-                    </td>
-                    {% endif %}
-                </tr>`;
-            treasuryTableBody.innerHTML += row;
-        });
-    }
+      var rows = treasury.map(function(entry) {
+          var formattedDate = formatDate(entry.created_at);
+          return `
+              <tr class="custom-row">
+                  <td>${entry.number}</td>
+                  <td>${entry.inumber}</td>
+                  <td>${entry.amount}</td>
+                  <td>${entry.payment}</td>
+                  <td>${formattedDate}</td>
+                  {% if user.is_staff %}
+                  <td>
+                      <button style="width: 70px; height: 36px;" class="btn btn-sm btn-primary edit-button"
+                          data-toggle="modal" data-target="#editModal" data-id="${entry.id}"
+                          data-amount="${entry.amount}" data-method="${entry.payment}">Edit</button>
+                      <button style="width: 70px; height: 36px;" class="btn btn-sm btn-danger delete-button"
+                          data-toggle="modal" data-target="#deleteModal" data-id="${entry.id}">Delete</button>
+                  </td>
+                  {% endif %}
+              </tr>`;
+      });
+      treasuryTableBody.innerHTML = rows.join('');
+  }
 
     $(document).on('click', '.edit-button', function() {
             var id = $(this).data('id');
@@ -385,6 +456,67 @@ document.addEventListener('DOMContentLoaded', function () {
             var action = $('#deleteForm').attr('action').replace('0', id);
             $('#deleteForm').attr('action', action);
         });
+    // ---- combined invoice (checkbox selection + export) ----
+    let combinedBar = document.getElementById('combined-bar');
+    let combinedBtn = document.getElementById('combined-invoice-btn');
+    let selCount = document.getElementById('sel-count');
+    let selectAll = document.getElementById('select-all-invoices');
+
+    function refreshCombinedBar() {
+        let checked = invoicesTableBody.querySelectorAll('.invoice-check:checked');
+        let count = checked.length;
+        var selCount = document.getElementById('sel-count');
+        if (selCount) {
+            selCount.textContent = count;
+        }
+        var combinedBar = document.getElementById('combined-bar');
+        if (combinedBar) {
+            combinedBar.style.display = count > 0 ? 'block' : 'none';
+        }
+    }
+    invoicesTableBody.addEventListener('change', function (e) {
+        if (e.target.classList.contains('invoice-check')) { refreshCombinedBar(); }
+    });
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            invoicesTableBody.querySelectorAll('.invoice-check').forEach(cb => { cb.checked = selectAll.checked; });
+            refreshCombinedBar();
+        });
+    }
+    combinedBtn.addEventListener('click', function () {
+        let numbers = Array.from(invoicesTableBody.querySelectorAll('.invoice-check:checked')).map(cb => cb.value);
+        if (numbers.length === 0) { showAlert('Please select at least one invoice.'); return; }
+
+        let original = combinedBtn.innerHTML;
+        combinedBtn.disabled = true;
+        combinedBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Generating...';
+
+        fetch(`/customers/export_combined/${customerId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: 'invoices=' + encodeURIComponent(numbers.join(',')),
+        })
+            .then(async (resp) => {
+                let ct = resp.headers.get('Content-Type') || '';
+                if (ct.includes('application/pdf')) {
+                    let blob = await resp.blob();
+                    let url = URL.createObjectURL(blob);
+                    let a = document.createElement('a');
+                    a.href = url; a.download = 'Combined Invoice.pdf';
+                    document.body.appendChild(a); a.click(); a.remove();
+                    URL.revokeObjectURL(url);
+                } else {
+                    let data = await resp.json().catch(() => ({ error: 'Unexpected error.' }));
+                    showAlert(data.error || 'Could not generate the combined invoice.');
+                }
+            })
+            .catch(() => showAlert('Network error while generating the combined invoice.'))
+            .finally(() => { combinedBtn.disabled = false; combinedBtn.innerHTML = original; });
+    });
+
     function updateTotals(totalInvoiced, totalTreasury, requiredAmount) {
         totalInvoicedCard.innerText = Number(totalInvoiced).toFixed(2) || 0;
         totalTreasuryCard.innerText = Number(totalTreasury).toFixed(2) || 0;
@@ -401,6 +533,10 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         var date = new Date(dateString);
         return date.toLocaleString('en-US', options);
+    }
+    function getCookie(name) {
+        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return v ? v.pop() : '';
     }
 });
     </script>

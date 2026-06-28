@@ -49,6 +49,11 @@
         </div>
     </div>
 </div>
+<div style="margin: 20px 30px 0 30px; text-align: left;">
+    <a id="customer-info-btn" href="{% url 'customer_info_report' %}" class="btn btn-primary text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="light">
+        <i class="fas fa-file-pdf"></i> Customer Info PDF
+    </a>
+</div>
 <div id="itable1" class="scrollable-div" style="margin: 40px 30px 30px 30px;">
     <table class="table table-striped table-borderless">
   <thead>
@@ -332,13 +337,7 @@ var radioButton = document.getElementById('inlineRadio2');
 radioButton.checked = true;
 </script>
 {% endif %}
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Get all radio button elements
@@ -353,77 +352,7 @@ radioButton.checked = true;
             });
         });
     });
-    document.addEventListener('DOMContentLoaded', function() {
-  fetch('/drivers/fetch-pmissions/')
-    .then(response => response.json())
-    .then(data => {
-      const pmissions = data.pmissions;
-      const toastContainer = document.getElementById('toast-container');
-      pmissions.forEach(function(mission) {
-        const toastHTML = `
-          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-              <strong class="mr-auto">${mission.customer_name}</strong>
-            </div>
-            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-              From: ${mission.from_location}<br>
-              To: ${mission.to_location}<br>
-              Vehicle: ${mission.car_type} (${mission.car_num})
-            </div>
-          </div>
-        `;
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-        // Add click event to the toast to mark as read and close the toast
-        const toastElement = document.getElementById(`toast-${mission.id}`);
-        toastElement.addEventListener('click', function() {
-          markAsRead(mission.id);
-          $(toastElement).toast('hide'); // Close the toast after marking as read
-        });
-      });
-
-      // Initialize toast with autohide set to false
-      $('.toast').toast({
-        autohide: false
-      }).toast('show');  // Display all toasts without auto-hiding
-    })
-    .catch(error => {
-      console.error('Error fetching PMissions:', error);
-    });
-
-  // Mark the mission as read when clicked
-  function markAsRead(missionId) {
-    fetch(`/drivers/mark-as-read/${missionId}/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-        'Content-Type': 'application/json'
-      },
-    }).then(response => response.json())
-      .then(data => {
-        console.log(`Mission ${missionId} marked as read`);
-      })
-      .catch(error => {
-        console.error('Error marking as read:', error);
-      });
-  }
-
-  // Function to get the CSRF token
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-});
+    
 function setDynamicHeight() {
         // Get the screen height
         let screenHeight = window.innerHeight;
@@ -549,23 +478,28 @@ function setDynamicHeight() {
     var action = $('#editForm').attr('action').replace('0', id);
     $('#editForm').attr('action', action);
 });
-// Wait until ReactToastify is loaded
-    //const socket = new WebSocket('ws://' + window.location.host + '/ws/notifications/');
-    //socket.onopen = function(event) {
-    //console.log('WebSocket opened');
-    // Only send messages after the WebSocket connection is open
-    //socket.send(JSON.stringify({'notification': 'notification'}));
-    //};
-    //socket.onmessage = function(event) {
-            //const data = JSON.parse(event.data);
-            //window.alert("notification"); // Correct method to display a toast notification
-        //};
-        //socket.onclose = function(event) {
-            //console.error('WebSocket closed');
-        //};
-        //socket.onerror = function(error) {
-            //console.error('WebSocket error:', error);
-        //};
+
+(function () {
+    let btn = document.getElementById('customer-info-btn');
+    if (!btn) return;
+    let base = btn.getAttribute('href');
+    let queryInput = document.querySelector('input[name="query"]'); // the {{ form.query }} field
+
+    function syncInfoUrl() {
+        let params = new URLSearchParams();
+        let q = queryInput ? queryInput.value.trim() : '';
+        if (q) params.set('query', q);
+        let opt = document.querySelector('input[name="inlineRadioOptions"]:checked');
+        if (opt) params.set('inlineRadioOptions', opt.value);
+        let qs = params.toString();
+        btn.href = qs ? base + '?' + qs : base;
+    }
+
+    if (queryInput) queryInput.addEventListener('input', syncInfoUrl);
+    document.querySelectorAll('input[name="inlineRadioOptions"]').forEach(r =>
+        r.addEventListener('change', syncInfoUrl));
+    syncInfoUrl();  // run once on load
+})();
 
 </script>
 </body>

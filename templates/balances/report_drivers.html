@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 1.2cm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Amiri", "Arial", "DejaVu Sans", sans-serif; color: #222; direction: rtl; }
+
+  .header { border-bottom: 3px solid #198754; padding-bottom: 8px; margin-bottom: 14px; }
+  .header h1 { margin: 0; font-size: 20px; color: #198754; }
+  .header .range { margin: 4px 0 0; font-size: 12px; color: #555; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; page-break-inside: auto; }
+  thead { display: table-header-group; }
+  th, td { border: 1px solid #d0d0d0; padding: 8px 10px; text-align: center; }
+  th { background: #198754; color: #fff; font-weight: bold; }
+  tbody tr:nth-child(even) { background: #f1f8f4; }
+  .name { text-align: right; }
+
+  .rank-1 td { background: #fff3cd; font-weight: bold; }
+  .rank-2 td { background: #e9ecef; font-weight: bold; }
+  .rank-3 td { background: #f5e6d3; font-weight: bold; }
+
+  tfoot td { font-weight: bold; background: #198754; color: #fff; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>تقرير أداء السائقين</h1>
+    <p class="range">من {{ date_from }} إلى {{ date_to }}</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th style="width:8%;">#</th><th>السائق</th><th style="width:30%;">عدد المركبات المنقولة</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="rank-{{ forloop.counter }}">
+        <td>{{ forloop.counter }}</td>
+        <td class="name">{{ r.name }}</td>
+        <td>{{ r.vehicles }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="2">الإجمالي</td><td>{{ total_vehicles }}</td></tr>
+    </tfoot>
+  </table>
+</body>
+</html>

@@ -30,6 +30,9 @@ urlpatterns = [
     path('get-location-suggestions/', views.get_location_suggestions, name='get_location_suggestions'),
     path('fetch-pmissions/', views.fetch_pmissions, name='fetch_pmissions'),
     path('mark-as-read/<int:mission_id>/', views.mark_as_read, name='mark_as_read'),
+    path('mark-as-read-bulk/', views.mark_as_read_bulk, name='mark_as_read_bulk'),
+    path('change_pmission_customer/<int:id>/', views.change_pmission_customer, name='change_pmission_customer'),
+
 ]
 
 
