@@ -91,9 +91,15 @@
         });
     }).catch(err => console.error('Service worker registration failed:', err));
 
-    // Foreground message (tab open): play a sound and show the driver's info inline immediately.
+    // Foreground message (tab open): Firebase does NOT auto-show a popup while the tab has
+    // focus, so show one ourselves - plus play a sound and update the driver-info box inline.
     messaging.onMessage(function(payload) {
         playNotificationSound();
+        if (Notification.permission === 'granted') {
+            const title = (payload.notification && payload.notification.title) || 'SMT';
+            const body = (payload.notification && payload.notification.body) || '';
+            new Notification(title, { body: body, icon: '/static/image/logo.png' });
+        }
         if (payload.data && payload.data.type === 'mission_assigned') {
             let box = document.getElementById('driver-info');
             if (!box) {

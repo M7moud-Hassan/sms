@@ -137,10 +137,17 @@
                 });
             }).catch(err => console.error('Service worker registration failed:', err));
 
-            // Foreground message: play the same bell sound and refresh the count immediately.
+            // Foreground message: Firebase does NOT auto-show a popup while the tab has focus
+            // (that only happens via the background service worker) - so show one ourselves,
+            // on top of the bell sound and refreshing the count immediately.
             messaging.onMessage(function(payload) {
                 playBellSound();
                 checkNewRequests();
+                const title = (payload.notification && payload.notification.title) || 'SMT';
+                const body = (payload.notification && payload.notification.body) || '';
+                if (Notification.permission === 'granted') {
+                    new Notification(title, { body: body, icon: '/static/image/logo.png' });
+                }
             });
         })();
         {% endif %}
