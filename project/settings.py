@@ -12,9 +12,16 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Real secrets (DB password, SECRET_KEY, etc.) live in a local .env file, never committed
+# (see .gitignore). Without one - e.g. a fresh local dev checkout - every setting below
+# falls back to the same dev-friendly defaults this file always had.
+load_dotenv(BASE_DIR / ".env")
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -22,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-!@#4$%5^&*()_+1234567890abcdefghijklmnopqrstuvwxyz")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = ["*"]
 
@@ -87,6 +94,10 @@ FIREBASE_WEB_CONFIG = {
 FIREBASE_VAPID_KEY = os.getenv(
     "FIREBASE_VAPID_KEY", "BF-QvB2UfkUoc-pAVLBWtObWuoRpZromZLzvPNR2BLnJ1OVWi69Zp6p38TU-5PiHbW3Dnn3E_-_AsNNEr5mlNhg"
 )
+
+# nginx terminates SSL and proxies to gunicorn over plain HTTP; without this, Django
+# thinks every proxied request is insecure and secure-cookie/CSRF checks misbehave.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
@@ -167,11 +178,11 @@ WSGI_APPLICATION = 'project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'smtproject',
-        'USER': 'postgres',
-        'PASSWORD': 'mahm01142',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME', 'smtproject'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'mahm01142'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
