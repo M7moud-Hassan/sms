@@ -68,9 +68,6 @@
                     {% endif %}
                 </td>
                 <td>
-                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addBonusModal{{ card.pk }}" title="Add Bonus">
-    <i class="bi bi-gift"></i>
-</button>
                     <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editCardModal{{ card.pk }}" title="Edit">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -84,7 +81,6 @@
             </tr>
             {% include 'cards/includes/edit_card_modal.html' with card=card %}
             {% include 'cards/includes/delete_card_modal.html' with card=card %}
-            {% include 'cards/includes/add_bonus_modal.html' with card=card services=services %}
             {% empty %}
             <tr>
                 <td colspan="7" class="text-center py-4 text-muted">No cards found.</td>
@@ -120,4 +116,5 @@
 <!-- Add Card Modal -->
 {% include 'cards/includes/add_card_modal.html' %}
 {% include 'cards/includes/add_customer_modal.html' %}
+{% include 'cards/includes/add_showroom_modal.html' %}
 {% endblock %}

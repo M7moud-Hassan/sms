@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{ invoice.invoice_number }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #222;
+        }
+        .sheet {
+            max-width: 210mm;
+            margin: 10mm auto;
+            background: #fff;
+            padding: 15mm;
+            box-sizing: border-box;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 5mm;
+            margin-bottom: 6mm;
+        }
+        .logo {
+            font-size: 18pt;
+            font-weight: 900;
+            color: #3498db;
+        }
+        .invoice-meta {
+            text-align: right;
+            font-size: 10pt;
+        }
+        .invoice-meta .number {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .status {
+            display: inline-block;
+            margin-top: 2mm;
+            padding: 1mm 4mm;
+            border-radius: 2mm;
+            font-weight: bold;
+            font-size: 9pt;
+            color: #fff;
+            background-color: {% if invoice.status == 'paid' %}#28a745{% elif invoice.status == 'cancelled' %}#6c757d{% else %}#dc3545{% endif %};
+        }
+        .section-title {
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 2mm;
+        }
+        .info-grid {
+            display: flex;
+            gap: 10mm;
+            margin-bottom: 8mm;
+        }
+        .info-grid > div { flex: 1; }
+        .info-row { font-size: 10.5pt; margin-bottom: 1mm; }
+        .info-row .label { color: #555; }
+        table.items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6mm;
+        }
+        table.items th {
+            background: #2c3e50;
+            color: #fff;
+            text-align: left;
+            padding: 3mm;
+            font-size: 9.5pt;
+        }
+        table.items td {
+            padding: 3mm;
+            border-bottom: 1px solid #ddd;
+            font-size: 10.5pt;
+        }
+        table.items td.num { text-align: right; }
+        .totals {
+            width: 100%;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .totals table { border-collapse: collapse; }
+        .totals td {
+            padding: 1.5mm 3mm;
+            font-size: 10.5pt;
+        }
+        .totals tr.grand td {
+            font-size: 13pt;
+            font-weight: bold;
+            border-top: 2px solid #2c3e50;
+            color: #2c3e50;
+        }
+        .footer-note {
+            margin-top: 10mm;
+            font-size: 8.5pt;
+            color: #888;
+            text-align: center;
+        }
+        @media print {
+            body { background: none; }
+            .sheet { box-shadow: none; margin: 0; max-width: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sheet">
+        <div class="header">
+            <div>
+                <div class="logo">CARDMASTER</div>
+                <div class="section-title" style="margin-top:2mm;">Additional Cost Invoice</div>
+            </div>
+            <div class="invoice-meta">
+                <div class="number">{{ invoice.invoice_number }}</div>
+                <div>Date: {{ invoice.created_at|date:"Y-m-d H:i" }}</div>
+                <div><span class="status">{{ invoice.get_status_display }}</span></div>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div>
+                <div class="section-title">Bill To</div>
+                <div class="info-row"><span class="label">Customer:</span> {{ invoice.service_request.card.customer.name }}</div>
+                <div class="info-row"><span class="label">Card #:</span> {{ invoice.service_request.card.number_card }}</div>
+                <div class="info-row"><span class="label">Vehicle:</span> {{ invoice.service_request.card.vehicle_number|default:"—" }}</div>
+            </div>
+            <div>
+                <div class="section-title">Service Request</div>
+                <div class="info-row"><span class="label">Request #:</span> {{ invoice.service_request.request_number }}</div>
+                <div class="info-row"><span class="label">Service:</span> {{ invoice.service_request.service.name }}</div>
+                <div class="info-row"><span class="label">Requested:</span> {{ invoice.service_request.requested_at|date:"Y-m-d H:i" }}</div>
+            </div>
+        </div>
+
+        <table class="items">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th class="num">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{{ invoice.service_request.service.name }} — {{ invoice.reason|default:"Additional cost" }}</td>
+                    <td class="num">${{ invoice.amount }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <table>
+                <tr class="grand"><td>Total Due</td><td class="num">${{ invoice.amount }}</td></tr>
+            </table>
+        </div>
+
+        <div class="footer-note">Card Management System — generated invoice for an additional mission cost.</div>
+    </div>
+    <script>
+        window.onload = function() { window.print(); }
+    </script>
+</body>
+</html>

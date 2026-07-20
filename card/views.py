@@ -1,6 +1,8 @@
+import json
 from datetime import datetime, timedelta
+from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect, render
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponse
 from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -10,8 +12,9 @@ from django.contrib import messages
 
 from customers.models import Customers
 from drivers.models import Drivers, MMission
-from .models import Card, Customer, CategoryCard, RequsetMission, Service, ServiceQuota, ServiceRequest, UserLastSeen
-from .forms import BonusQuotaForm, CardForm, CategoryForm, CustomerForm, MissionForm, ServiceForm, ServiceRequestForm, RequestStatusUpdateForm
+from .models import Card, Customer, CategoryCard, RequsetMission, Service, ServiceQuota, ServiceRequest, ServiceInvoice, Showroom, FCMToken, UserLastSeen
+from .forms import BonusQuotaForm, CardForm, CategoryForm, CustomerForm, MissionForm, ServiceForm, ServiceRequestForm, RequestStatusUpdateForm, ShowroomForm
+from . import firebase_push
 
 # ──────────────────────────────────────────────
 # DASHBOARD
@@ -64,12 +67,19 @@ class DashboardView(LoginRequiredMixin, ListView):
         context['total_requests'] = ServiceRequest.objects.count()
         context['customers'] = Customer.objects.all().order_by('name')
         context['categories'] = CategoryCard.objects.all().order_by('name')
+        context['showrooms'] = Showroom.objects.all().order_by('name')
 
         # الطلبات التي ليس لها مهمة
         context['requests_without_mission'] = ServiceRequest.objects.filter(mission__isnull=True).select_related('card', 'service')
 
         # عدد الإشعارات (الطلبات بدون مهمة)
         context['notification_count'] = ServiceRequest.objects.filter(mission__isnull=True).count()
+
+        # فواتير غير مدفوعة
+        unpaid_invoices = ServiceInvoice.objects.filter(status='unpaid')
+        context['unpaid_invoices_count'] = unpaid_invoices.count()
+        context['unpaid_invoices_total'] = unpaid_invoices.aggregate(total=Sum('amount'))['total'] or 0
+
         context['active_tab'] ='cards'
         # بيانات للتقارير (يمكن تمريرها إذا لزم)
         return context
@@ -139,6 +149,25 @@ class CustomerDeleteView(LoginRequiredMixin, DeleteView):
     model = Customer
     template_name = 'cards/includes/delete_customer_modal.html'
 
+# ──────────────────────────────────────────────
+# SHOWROOM (AJAX MODAL, inline "add new" from card forms)
+# ──────────────────────────────────────────────
+class ShowroomCreateView(LoginRequiredMixin, CreateView):
+    model = Showroom
+    form_class = ShowroomForm
+    template_name = 'cards/includes/add_showroom_modal.html'  # only used for AJAX
+
+    def form_valid(self, form):
+        self.object = form.save()
+        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'showroom_id': self.object.pk, 'showroom_name': self.object.name})
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'errors': form.errors})
+        return super().form_invalid(form)
+
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
         self.object.delete()
@@ -180,6 +209,7 @@ class CardListView(LoginRequiredMixin, ListView):
         context['customers'] = Customer.objects.all().order_by('name')
         context['categories'] = CategoryCard.objects.all().order_by('name')
         context['services'] = Service.objects.all().order_by('name')
+        context['showrooms'] = Showroom.objects.all().order_by('name')
         context['active_tab'] ='cards'
 
         return context
@@ -207,10 +237,12 @@ class CardCreateView(LoginRequiredMixin, CreateView):
         response = super().form_valid(form)  # saves the card
         service_ids = self.request.POST.getlist('service_id[]')
         quota_values = self.request.POST.getlist('quota[]')
-        is_superuser = self.request.user.is_superuser
         category_default = self.object.category.default_quota if self.object.category else 1
         for service_id, quota in zip(service_ids, quota_values):
-            quota_int = int(quota) if is_superuser else category_default
+            try:
+                quota_int = int(quota)
+            except (TypeError, ValueError):
+                quota_int = category_default
             ServiceQuota.objects.update_or_create(
                 card=self.object,
                 service_id=service_id,
@@ -297,6 +329,7 @@ class CardDetailView(LoginRequiredMixin, DetailView):
         context['services'] = Service.objects.all().order_by('name')
         context['customers'] = Customer.objects.all().order_by('name')   # for edit modal
         context['categories'] = CategoryCard.objects.all().order_by('name') # for edit modal
+        context['showrooms'] = Showroom.objects.all().order_by('name')   # for edit modal
         context['active_tab'] ='cards'
         context['all_services'] = Service.objects.select_related('category').order_by('category__name', 'name')
 
@@ -424,8 +457,8 @@ class CardScanView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        card_id = self.kwargs.get('pk')
-        card = get_object_or_404(Card, pk=card_id, is_active=True)
+        card_uuid = self.kwargs.get('card_uuid')
+        card = get_object_or_404(Card, uuid=card_uuid, is_active=True)
         context['card'] = card
         # Get services with remaining quota > 0
         quotas = ServiceQuota.objects.filter(card=card, remaining_uses__gt=0).select_related('service')
@@ -444,7 +477,13 @@ class SubmitServiceRequestView(CreateView):
     template_name = 'cards/request_confirmation.html'
 
     def dispatch(self, request, *args, **kwargs):
-        self.card = get_object_or_404(Card, pk=self.kwargs.get('card_id'), is_active=True)
+        # Reached via two different URLs: the QR-linked 'submit_request' (UUID) or the
+        # camera-scan portal's 'public_submit_request' (legacy integer id).
+        card_uuid = self.kwargs.get('card_uuid')
+        if card_uuid is not None:
+            self.card = get_object_or_404(Card, uuid=card_uuid, is_active=True)
+        else:
+            self.card = get_object_or_404(Card, pk=self.kwargs.get('card_id'), is_active=True)
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -463,8 +502,17 @@ class SubmitServiceRequestView(CreateView):
                 quota.save()
         except ServiceQuota.DoesNotExist:
             pass
+
+        staff_tokens = list(FCMToken.objects.filter(user__isnull=False).values_list('token', flat=True))
+        firebase_push.send_push(
+            staff_tokens,
+            title="طلب خدمة جديد",
+            body=f"{self.object.card.customer.name} - {self.object.service.name} ({self.object.request_number})",
+            data={'request_id': self.object.pk, 'type': 'new_request'},
+        )
+
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'success': True, 'request_number': self.object.request_number})
+            return JsonResponse({'success': True, 'request_number': self.object.request_number, 'request_id': self.object.pk})
         return super().form_valid(form)
 
     def form_invalid(self, form):
@@ -572,11 +620,11 @@ def create_update_mission(request, request_id):
         mission.contact_phone = service_request.contact_phone
         
         mission.save()
-
-        # Update the service request status to 'inprogress'
-        if service_request.status != 'inprogress':
-            service_request.status = 'inprogress'
-            service_request.save()
+        ServiceInvoice.sync_for_mission(mission)
+        # Note: the service request's status is left untouched here on purpose - the
+        # customer is notified (with the driver's info) when staff explicitly moves
+        # the status to "In Progress" via the status-update modal, not the moment a
+        # driver is merely assigned. See UpdateRequestStatusView.form_valid.
 
         return JsonResponse({'success': True, 'mission_id': mission.id})
     else:
@@ -670,7 +718,28 @@ class UpdateRequestStatusView(LoginRequiredMixin, UserPassesTestMixin, UpdateVie
         return self.request.user.is_staff
 
     def form_valid(self, form):
+        old_status = self.object.status  # UpdateView already loaded self.object pre-save
         self.object = form.save()
+
+        if old_status != 'inprogress' and self.object.status == 'inprogress':
+            mission = getattr(self.object, 'mission', None)
+            if mission and mission.driver:
+                customer_tokens = list(
+                    FCMToken.objects.filter(service_request=self.object).values_list('token', flat=True)
+                )
+                driver_phone = mission.driver.phone or "غير متوفر"
+                firebase_push.send_push(
+                    customer_tokens,
+                    title="السائق في الطريق",
+                    body=f"السائق: {mission.driver.name} - هاتف: {driver_phone}",
+                    data={
+                        'request_id': self.object.pk,
+                        'type': 'mission_assigned',
+                        'driver_name': mission.driver.name,
+                        'driver_phone': driver_phone,
+                    },
+                )
+
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': True})
         return redirect('request_list')
@@ -679,7 +748,7 @@ class UpdateRequestStatusView(LoginRequiredMixin, UserPassesTestMixin, UpdateVie
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': False, 'errors': form.errors})
         return super().form_invalid(form)
-    
+
 
 from django.http import JsonResponse
 from .models import Service
@@ -688,12 +757,12 @@ def get_services_by_category(request):
     category_id = request.GET.get('category_id')
     if category_id:
         try:
-            default_quota = CategoryCard.objects.values_list('default_quota', flat=True).get(pk=category_id)
+            category_default = CategoryCard.objects.values_list('default_quota', flat=True).get(pk=category_id)
         except CategoryCard.DoesNotExist:
-            default_quota = 1
+            category_default = 1
         services = [
-            {'id': s['id'], 'name': s['name'], 'default_quota': default_quota}
-            for s in Service.objects.filter(category_id=category_id).values('id', 'name')
+            {'id': s['id'], 'name': s['name'], 'default_quota': s['default_quota'] if s['default_quota'] is not None else category_default}
+            for s in Service.objects.filter(category_id=category_id).values('id', 'name', 'default_quota')
         ]
         return JsonResponse({'services': services})
     return JsonResponse({'services': []})
@@ -750,9 +819,10 @@ class CardReportView(LoginRequiredMixin, TemplateView):
         start_date = self.request.GET.get('start')
         end_date = self.request.GET.get('end')
         category_id = self.request.GET.get('category')
+        showroom_param = self.request.GET.get('showroom')
         search = self.request.GET.get('q', '').strip()
 
-        cards = Card.objects.select_related('customer', 'category').all()
+        cards = Card.objects.select_related('customer', 'category', 'showroom').all()
 
         if start_date:
             cards = cards.filter(created_at__date__gte=start_date)
@@ -760,17 +830,23 @@ class CardReportView(LoginRequiredMixin, TemplateView):
             cards = cards.filter(created_at__date__lte=end_date)
         if category_id:
             cards = cards.filter(category_id=category_id)
+        if showroom_param == 'individual':
+            cards = cards.filter(showroom__isnull=True)
+        elif showroom_param:
+            cards = cards.filter(showroom_id=showroom_param)
         if search:
             cards = cards.filter(
                 Q(customer__name__icontains=search) |
                 Q(vehicle_number__icontains=search) |
                 Q(chassis_number__icontains=search) |
                 Q(type_car__icontains=search) |
-                Q(color_car__icontains=search)
+                Q(color_car__icontains=search) |
+                Q(showroom__name__icontains=search)
             )
 
         context['cards'] = cards
         context['categories'] = CategoryCard.objects.all()
+        context['showrooms'] = Showroom.objects.all().order_by('name')
         context['total_value'] = sum(card.category.price if card.category else 0 for card in cards)
         context['active_tab'] = 'cards'
         return context
@@ -852,3 +928,147 @@ def mark_requests_seen(request):
         last_seen.last_request_time = timezone.now()
         last_seen.save()
     return JsonResponse({'status': 'ok'})
+
+
+# ──────────────────────────────────────────────
+# FIREBASE PUSH NOTIFICATIONS
+# ──────────────────────────────────────────────
+@csrf_exempt
+@require_POST
+def register_fcm_token(request):
+    """Register a web-push token for either a logged-in staff user or a public
+    service request (customers aren't logged in, so their token is tied to the
+    specific request they're tracking)."""
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'success': False, 'error': 'Invalid JSON body.'}, status=400)
+
+    token = payload.get('token')
+    if not token:
+        return JsonResponse({'success': False, 'error': 'token is required.'}, status=400)
+
+    defaults = {}
+    if request.user.is_authenticated and request.user.is_staff:
+        defaults['user'] = request.user
+    service_request_id = payload.get('service_request_id')
+    if service_request_id:
+        service_request = get_object_or_404(ServiceRequest, pk=service_request_id)
+        defaults['service_request'] = service_request
+
+    FCMToken.objects.update_or_create(token=token, defaults=defaults)
+    return JsonResponse({'success': True})
+
+
+def firebase_messaging_sw(request):
+    """Serves the Firebase Messaging service worker from the site root (rather
+    than under /static/) so its default scope covers the whole app, with the
+    web config injected server-side instead of hardcoded in a static file."""
+    js = f"""
+importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js');
+
+firebase.initializeApp({json.dumps(settings.FIREBASE_WEB_CONFIG)});
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage(function(payload) {{
+    const title = payload.notification?.title || 'SMT';
+    const options = {{
+        body: payload.notification?.body || '',
+        icon: '/static/image/logo.png',
+        data: payload.data || {{}},
+    }};
+    self.registration.showNotification(title, options);
+}});
+"""
+    return HttpResponse(js, content_type='application/javascript')
+
+
+@login_required
+@require_POST
+def send_test_notification(request):
+    """Lets a staff member send a push to their own registered device(s), to verify
+    the whole pipeline (browser permission -> token -> real Firebase delivery)."""
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'Staff only.'}, status=403)
+
+    tokens = list(FCMToken.objects.filter(user=request.user).values_list('token', flat=True))
+    if not tokens:
+        return JsonResponse({
+            'success': False,
+            'error': 'لا يوجد جهاز مسجل لحسابك بعد. افتح الداشبورد ووافق على إذن الإشعارات، ثم جرّب تاني.',
+        })
+
+    firebase_push.send_push(
+        tokens,
+        title="إشعار تجريبي",
+        body="لو وصلك ده، يبقى نظام الإشعارات شغال تمام!",
+        data={'type': 'test'},
+    )
+    return JsonResponse({'success': True, 'sent_to': len(tokens)})
+
+
+# ──────────────────────────────────────────────
+# SERVICE INVOICES (overage / metered usage billing)
+# ──────────────────────────────────────────────
+class ServiceInvoiceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = ServiceInvoice
+    template_name = 'cards/invoice_list.html'
+    context_object_name = 'invoices'
+    paginate_by = 20
+
+    def test_func(self):
+        return self.request.user.is_staff
+
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related(
+            'service_request', 'service_request__card', 'service_request__card__customer', 'service_request__service'
+        )
+        q = self.request.GET.get('q', '')
+        if q:
+            queryset = queryset.filter(
+                Q(invoice_number__icontains=q) |
+                Q(service_request__request_number__icontains=q) |
+                Q(service_request__card__number_card__icontains=q) |
+                Q(service_request__card__customer__name__icontains=q) |
+                Q(service_request__service__name__icontains=q)
+            )
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['status_choices'] = ServiceInvoice.STATUS_CHOICES
+        context['query_params'] = self.request.GET.copy()
+        if 'page' in context['query_params']:
+            del context['query_params']['page']
+        context['active_tab'] = 'cards'
+        context['unpaid_total'] = self.get_queryset().filter(status='unpaid').aggregate(total=Sum('amount'))['total'] or 0
+        return context
+
+
+@login_required
+@require_POST
+def mark_invoice_paid(request, pk):
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'Staff only.'}, status=403)
+    invoice = get_object_or_404(ServiceInvoice, pk=pk)
+    invoice.status = 'paid'
+    invoice.paid_at = timezone.now()
+    invoice.save()
+    return JsonResponse({'success': True})
+
+
+@login_required
+def invoice_print(request, pk):
+    if not request.user.is_staff:
+        raise Http404
+    invoice = get_object_or_404(
+        ServiceInvoice.objects.select_related(
+            'service_request', 'service_request__card', 'service_request__card__customer', 'service_request__service'
+        ),
+        pk=pk
+    )
+    return render(request, 'cards/invoice_print.html', {'invoice': invoice})

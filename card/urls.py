@@ -13,6 +13,9 @@ urlpatterns = [
     path('customers/<int:pk>/edit/', views.CustomerUpdateView.as_view(), name='customer_edit'),
     path('customers/<int:pk>/delete/', views.CustomerDeleteView.as_view(), name='customer_delete'),
 
+    # Showrooms
+    path('showrooms/add/', views.ShowroomCreateView.as_view(), name='showroom_add'),
+
     # Cards
     path('cards/', views.CardListView.as_view(), name='card_list'),
     path('cards/<int:pk>/', views.CardDetailView.as_view(), name='card_detail'),
@@ -34,8 +37,8 @@ urlpatterns = [
     path('services/<int:pk>/edit/', views.ServiceUpdateView.as_view(), name='service_edit'),
     path('services/<int:pk>/delete/', views.ServiceDeleteView.as_view(), name='service_delete'),
 
-    path('scan/<int:pk>/', views.CardScanView.as_view(), name='card_scan'),
-    path('request/<int:pk>/submit/', views.SubmitServiceRequestView.as_view(), name='submit_request'),
+    path('scan/<uuid:card_uuid>/', views.CardScanView.as_view(), name='card_scan'),
+    path('request/<uuid:card_uuid>/submit/', views.SubmitServiceRequestView.as_view(), name='submit_request'),
     path('request/<int:pk>/status/', views.RequestStatusView.as_view(), name='request_status'),
 
     # STAFF: Bonus quota
@@ -56,7 +59,14 @@ path('card/<int:pk>/requests/', views.card_requests, name='card_requests'),
     path('reports/services/', views.ServiceReportView.as_view(), name='service_report'),
     path('reports/card-lookup/', views.CardLookupView.as_view(), name='card_lookup'),
 
+    # Invoices (overage / metered usage billing)
+    path('invoices/', views.ServiceInvoiceListView.as_view(), name='invoice_list'),
+    path('invoices/<int:pk>/print/', views.invoice_print, name='invoice_print'),
+    path('invoices/<int:pk>/mark-paid/', views.mark_invoice_paid, name='mark_invoice_paid'),
+
     path('notifications/check/', views.check_new_requests, name='check_new_requests'),
 path('notifications/mark-seen/', views.mark_requests_seen, name='mark_requests_seen'),
-     
+    path('fcm/register/', views.register_fcm_token, name='register_fcm_token'),
+    path('fcm/test/', views.send_test_notification, name='send_test_notification'),
+
 ]

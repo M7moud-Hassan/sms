@@ -15,6 +15,7 @@
                     <tr><th>Customer</th><td>{{ card.customer.name }}</td></tr>
                     <tr><th>Phone</th><td>{{ card.customer.phone|default:"—" }}</td></tr>
                     <tr><th>Category</th><td>{{ card.category.name|default:"—" }}</td></tr>
+                    <tr><th>Showroom</th><td>{% if card.showroom %}{{ card.showroom.name }}{% else %}<span class="text-muted">Individual card</span>{% endif %}</td></tr>
                     <tr><th>Vehicle</th><td>{{ card.vehicle_number|default:"—" }}</td></tr>
                     <tr><th>Chassis</th><td>{{ card.chassis_number|default:"—" }}</td></tr>
                     <tr><th>Car Type</th><td>{{ card.type_car|default:"—" }}</td></tr>
@@ -122,6 +123,7 @@
 
 <!-- Include Edit Card Modal (if needed) -->
 {% include 'cards/includes/edit_card_modal.html' with card=card %}
+{% include 'cards/includes/add_showroom_modal.html' %}
 
 <!-- Add Service Quota Modal (new) -->
 <div class="modal fade" id="addServiceQuotaModal" tabindex="-1" aria-labelledby="addServiceQuotaModalLabel" aria-hidden="true">

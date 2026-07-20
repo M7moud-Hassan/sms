@@ -23,11 +23,48 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
             padding: 3mm 4mm;
             box-sizing: border-box;
+            page-break-after: avoid;
+            border: 1px solid #ccc;
+        }
+        .main-row {
+            display: flex;
+            gap: 3mm;
+            height: 100%;
+        }
+        /* QR gets its own dedicated column so it can be printed large and clear */
+        .qr-col {
+            width: 26mm;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .qr {
+            background: #ffffff;
+            padding: 1mm;
+            border-radius: 1.5mm;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            line-height: 0;
+        }
+        .qr img {
+            width: 22mm;
+            height: 22mm;
+            image-rendering: pixelated;
+        }
+        .qr-caption {
+            margin-top: 1.2mm;
+            font-size: 5.5pt;
+            line-height: 1.3;
+            text-align: center;
+            color: #333;
+        }
+        .info-col {
+            flex: 1;
+            min-width: 0;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            page-break-after: avoid;
-            border: 1px solid #ccc;
         }
         .header {
             display: flex;
@@ -37,12 +74,12 @@
             padding-bottom: 1.5mm;
         }
         .card-number {
-            font-size: 10pt;
+            font-size: 9.5pt;
             font-weight: bold;
             color: #2c3e50;
         }
         .logo {
-            font-size: 13pt;
+            font-size: 12pt;
             font-weight: 900;
             color: #3498db;
         }
@@ -56,27 +93,27 @@
         }
         .info-row {
             display: flex;
-            margin-bottom: 0.5mm;
+            margin-bottom: 0.6mm;
         }
         .label {
-            width: 28mm;
+            width: 20mm;
+            flex-shrink: 0;
             font-weight: bold;
             color: #555;
         }
         .value {
             color: #000;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
-        .footer {
+        .footer-row {
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: center;
             border-top: 1px dashed #aaa;
             padding-top: 1.5mm;
             font-size: 7pt;
-        }
-        .qr img {
-            width: 13mm;
-            height: 13mm;
         }
         .status {
             padding: 0.5mm 2mm;
@@ -94,44 +131,52 @@
 </head>
 <body>
     <div class="card-container">
-        <div class="header">
-            <span class="logo">CARDMASTER</span>
-            <span class="card-number">{{ card.number_card }}</span>
-        </div>
-        <div class="info">
-            <div class="info-row">
-                <span class="label">Customer:</span>
-                <span class="value">{{ card.customer.name }}</span>
+        <div class="main-row">
+            <!-- Large, high-contrast QR with a clean quiet zone for reliable phone-camera scans -->
+            <div class="qr-col">
+                <div class="qr">
+                    {% if card.qr_code %}
+                        <img src="{{ card.qr_code.url }}" alt="QR">
+                    {% endif %}
+                </div>
+                <div class="qr-caption">امسح لطلب خدمة<br>Scan to Request</div>
             </div>
-            <div class="info-row">
-                <span class="label">Vehicle:</span>
-                <span class="value">{{ card.vehicle_number|default:"—" }}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Chassis:</span>
-                <span class="value">{{ card.chassis_number|default:"—" }}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Car Type:</span>
-                <span class="value">{{ card.type_car|default:"—" }}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Color:</span>
-                <span class="value">{{ card.color_car|default:"—" }}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Valid until:</span>
-                <span class="value">{{ card.end_at|date:"Y-m-d" }}</span>
-            </div>
-        </div>
-        <div class="footer">
-            <div class="status">
-                {{ card.is_active|yesno:"ACTIVE,INACTIVE" }}
-            </div>
-            <div class="qr">
-                {% if card.qr_code %}
-                    <img src="{{ card.qr_code.url }}" alt="QR">
-                {% endif %}
+            <div class="info-col">
+                <div class="header">
+                    <span class="logo">CARDMASTER</span>
+                    <span class="card-number">{{ card.number_card }}</span>
+                </div>
+                <div class="info">
+                    <div class="info-row">
+                        <span class="label">Customer:</span>
+                        <span class="value">{{ card.customer.name }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Vehicle:</span>
+                        <span class="value">{{ card.vehicle_number|default:"—" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Chassis:</span>
+                        <span class="value">{{ card.chassis_number|default:"—" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Car Type:</span>
+                        <span class="value">{{ card.type_car|default:"—" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Color:</span>
+                        <span class="value">{{ card.color_car|default:"—" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Valid until:</span>
+                        <span class="value">{{ card.end_at|date:"Y-m-d" }}</span>
+                    </div>
+                </div>
+                <div class="footer-row">
+                    <div class="status">
+                        {{ card.is_active|yesno:"ACTIVE,INACTIVE" }}
+                    </div>
+                </div>
             </div>
         </div>
     </div>

@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}Service Invoices{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-receipt"></i> Service Invoices</h1>
+    <span class="badge bg-danger fs-6">Unpaid total: ${{ unpaid_total|floatformat:2 }}</span>
+</div>
+
+<!-- Filter -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="search" class="form-label fw-bold">Search</label>
+                <input type="text" name="q" id="search" class="form-control"
+                       placeholder="Invoice #, request #, card #, customer, service" value="{{ request.GET.q }}">
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label fw-bold">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Apply</button>
+                <a href="{% url 'invoice_list' %}" class="btn btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Invoices Table -->
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Card</th>
+                <th>Customer</th>
+                <th>Service</th>
+                <th>Request #</th>
+                <th>Reason</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for invoice in invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.created_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ invoice.service_request.card.number_card }}</td>
+                <td>{{ invoice.service_request.card.customer.name }}</td>
+                <td>{{ invoice.service_request.service.name }}</td>
+                <td><a href="{% url 'request_status' invoice.service_request.pk %}">{{ invoice.service_request.request_number }}</a></td>
+                <td>{{ invoice.reason|default:"—" }}</td>
+                <td class="fw-bold">${{ invoice.amount }}</td>
+                <td>
+                    <span class="badge bg-{% if invoice.status == 'paid' %}success{% elif invoice.status == 'cancelled' %}secondary{% else %}danger{% endif %}">
+                        {{ invoice.get_status_display }}
+                    </span>
+                </td>
+                <td class="text-nowrap">
+                    <a href="{% url 'invoice_print' invoice.pk %}" target="_blank" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-printer"></i> Print
+                    </a>
+                    {% if invoice.status == 'unpaid' %}
+                    <button type="button" class="btn btn-sm btn-outline-success mark-paid-btn" data-invoice-id="{{ invoice.pk }}">
+                        <i class="bi bi-check-circle"></i> Mark Paid
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="10" class="text-center py-4 text-muted">No invoices found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+        </li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<script>
+    const markPaidUrlTemplate = "{% url 'mark_invoice_paid' 0 %}";  // .../0/mark-paid/ -> swap the 0 for the real pk
+    document.querySelectorAll('.mark-paid-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('Mark this invoice as paid?')) return;
+            const invoiceId = this.dataset.invoiceId;
+            const url = markPaidUrlTemplate.replace('/0/mark-paid/', `/${invoiceId}/mark-paid/`);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Could not mark invoice as paid.');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+</script>
+{% endblock %}

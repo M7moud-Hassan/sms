@@ -125,6 +125,7 @@ def add_driver(request):
         name = request.POST.get('name').strip()
         username = request.POST.get('username')
         password = request.POST.get('password')
+        phone = request.POST.get('phone', '').strip()
         queryset = Drivers.objects.filter(Q(username=username) & Q(password=password))
         if queryset.exists():
             record = queryset.first()  # This will get the first object that matches the query
@@ -134,7 +135,7 @@ def add_driver(request):
         if record:
             messages.success(request, "Repeated Username and Password...")
         else:
-            new_driver = Drivers(name=name, username=username, password=password)
+            new_driver = Drivers(name=name, username=username, password=password, phone=phone)
             new_driver.save()
             update_driver_balance(name)
     return redirect('drivers_index')
@@ -153,6 +154,7 @@ def edit_driver(request, id):
         item.status = request.POST.get('status')
         item.username = request.POST.get('username')
         item.password = request.POST.get('password')
+        item.phone = request.POST.get('phone', '').strip()
         tdriver = Drivers.objects.exclude(id=id)
         if not tdriver:
             item.save()

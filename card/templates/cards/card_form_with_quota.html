@@ -38,6 +38,12 @@
                                 </div>
 
                                 <div class="mb-3">
+                                    <label for="{{ form.showroom.id_for_label }}" class="form-label fw-semibold">Showroom</label>
+                                    {{ form.showroom }}
+                                    <div class="form-text text-muted small">Leave as "Individual" unless this card is a gift from a showroom.</div>
+                                </div>
+
+                                <div class="mb-3">
                                     <label for="{{ form.vehicle_number.id_for_label }}" class="form-label fw-semibold">Vehicle Number</label>
                                     {{ form.vehicle_number }}
                                 </div>

@@ -46,6 +46,9 @@
                         <div>
                             <span class="fw-bold">{{ service.name }}</span>
                             <span class="badge bg-info rounded-pill ms-2">{{ service.get_location_type_display }}</span>
+                            {% if service.default_quota %}
+                            <span class="badge bg-secondary rounded-pill ms-1">Quota override: {{ service.default_quota }}</span>
+                            {% endif %}
                             {% if service.description %}
                             <p class="small text-muted mb-0 mt-1">{{ service.description }}</p>
                             {% endif %}

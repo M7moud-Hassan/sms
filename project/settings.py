@@ -57,8 +57,36 @@ INSTALLED_APPS = [
 CSRF_TRUSTED_ORIGINS = [
     "https://127.0.0.1:8000",
     "https://localhost:8000",
-    "https://192.168.1.3:8000",  # ضع IP جهازك
+    "https://192.168.1.2:8000",  # ضع IP جهازك
 ]
+
+# Public HTTPS base address used to build the link encoded inside card QR codes.
+# Change via env var once the app is reachable on a real domain.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://192.168.1.2:8000")
+
+# ──────────────────────────────────────────────
+# Firebase Cloud Messaging (push notifications)
+# ──────────────────────────────────────────────
+# 1. Server-side: download a service account key from Firebase Console
+#    (Project Settings > Service Accounts > Generate new private key) and save
+#    it at the path below (gitignored). Sending silently no-ops until this exists.
+FIREBASE_CREDENTIALS_PATH = os.getenv(
+    "FIREBASE_CREDENTIALS_PATH", os.path.join(BASE_DIR, "firebase-service-account.json")
+)
+# 2. Client-side: the Web app config from Firebase Console (Project Settings >
+#    General > Your apps > Web app). Not secret - safe to ship to the browser.
+FIREBASE_WEB_CONFIG = {
+    "apiKey": os.getenv("FIREBASE_API_KEY", "AIzaSyA7kZu4vmJwpRXynjB06suRjJfamRb9t7Q"),
+    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", "alroaya-crm.firebaseapp.com"),
+    "projectId": os.getenv("FIREBASE_PROJECT_ID", "alroaya-crm"),
+    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "alroaya-crm.firebasestorage.app"),
+    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", "761319671828"),
+    "appId": os.getenv("FIREBASE_APP_ID", "1:761319671828:web:c56ed755966579e7efff01"),
+}
+# 3. VAPID public key, from Project Settings > Cloud Messaging > Web Push certificates.
+FIREBASE_VAPID_KEY = os.getenv(
+    "FIREBASE_VAPID_KEY", "BF-QvB2UfkUoc-pAVLBWtObWuoRpZromZLzvPNR2BLnJ1OVWi69Zp6p38TU-5PiHbW3Dnn3E_-_AsNNEr5mlNhg"
+)
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
@@ -124,6 +152,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'card.context_processors.firebase_config',
             ],
         },
     },

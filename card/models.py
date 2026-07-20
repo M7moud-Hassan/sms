@@ -1,10 +1,14 @@
 from django.db import models
+from django.conf import settings
+from django.urls import reverse
 from phonenumber_field.modelfields import PhoneNumberField
 from django.utils import timezone
 import qrcode
+from qrcode.constants import ERROR_CORRECT_H
 from io import BytesIO
 from django.core.files import File
 from datetime import timedelta
+import uuid
 
 from drivers.models import Drivers
 
@@ -13,6 +17,16 @@ class CategoryCard(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # card price
     default_quota = models.PositiveIntegerField(default=1)
+
+    def __str__(self):
+        return self.name
+
+class Showroom(models.Model):
+    """A car dealership that gifts cards to its own customers. A card with no showroom is an individual card."""
+    name = models.CharField(max_length=150, unique=True)
+
+    class Meta:
+        ordering = ['name']
 
     def __str__(self):
         return self.name
@@ -27,6 +41,10 @@ class Service(models.Model):
     category = models.ForeignKey(CategoryCard, on_delete=models.CASCADE, related_name='services')
     location_type = models.IntegerField(choices=LOCATION_CHOICES, default=1)
     # No price – card price is in CategoryCard
+    default_quota = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Overrides the category's default quota for this specific service when issuing a new card. Leave blank to use the category default."
+    )
 
     def __str__(self):
         return self.name
@@ -41,6 +59,8 @@ class Customer(models.Model):
         return self.name
 
 class Card(models.Model):
+    # Public identifier used in the QR scan link, so card IDs can't be guessed/enumerated (e.g. /scan/1/, /scan/2/...).
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='cards')
     number_card = models.CharField(max_length=20, unique=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -51,6 +71,7 @@ class Card(models.Model):
     color_car = models.CharField(max_length=50, null=True, blank=True)
     qr_code = models.ImageField(upload_to="cards/qr/", blank=True, null=True)
     category = models.ForeignKey(CategoryCard, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards')
+    showroom = models.ForeignKey(Showroom, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards', help_text="Leave blank for an individual card")
     is_active = models.BooleanField(default=True)
 
     def generate_card_number(self):
@@ -69,17 +90,20 @@ class Card(models.Model):
         if not self.end_at:
             self.end_at = timezone.now() + timedelta(days=365*2)
         if not self.qr_code:
-            data = f"""
-Card Number: {self.number_card}
-Customer: {self.customer.name}
-Phone: {self.customer.phone}
-Chassis: {self.chassis_number}
-Vehicle: {self.vehicle_number}
-Valid until: {self.end_at.strftime('%Y-%m-%d') if self.end_at else 'N/A'}
-            """
-            qr = qrcode.make(data.strip())
+            # self.uuid is already set (default=uuid.uuid4 applies at instantiation), so the
+            # scan URL can be built and the QR generated before the first insert.
+            scan_url = f"{settings.PUBLIC_BASE_URL.rstrip('/')}{reverse('card_scan', kwargs={'card_uuid': self.uuid})}"
+            qr = qrcode.QRCode(
+                version=None,
+                error_correction=ERROR_CORRECT_H,  # high redundancy: survives print wear/scratches
+                box_size=12,                       # higher-res source image, sharper when scaled on the printed card
+                border=4,
+            )
+            qr.add_data(scan_url)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
             buffer = BytesIO()
-            qr.save(buffer, format='PNG')
+            img.save(buffer, format='PNG')
             file_name = f'card_{self.number_card}.png'
             self.qr_code.save(file_name, File(buffer), save=False)
         super().save(*args, **kwargs)
@@ -127,6 +151,9 @@ class ServiceRequest(models.Model):
     from_location = models.CharField(max_length=255, blank=True, null=True)
     to_location = models.CharField(max_length=255, blank=True, null=True)
     contact_phone = PhoneNumberField(blank=True, null=True,region='JO')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_accuracy = models.FloatField(null=True, blank=True, help_text="GPS accuracy in meters, as reported by the customer's device")
 
     def generate_request_number(self):
         year = timezone.now().year
@@ -148,15 +175,75 @@ class ServiceRequest(models.Model):
     def __str__(self):
         return f"{self.request_number} - {self.card.number_card} - {self.service.name}"
 
+class ServiceInvoice(models.Model):
+    """Bill for an additional cost incurred on a service request's mission (e.g. towing beyond
+    what was covered, extra fuel, etc). Sourced from RequsetMission.cost + cost_reason. Not
+    related to the separate `invoices` app, which handles a different, driver/customer-facing
+    dinar billing flow."""
+    STATUS_CHOICES = [
+        ('unpaid', 'Unpaid'),
+        ('paid', 'Paid'),
+        ('cancelled', 'Cancelled'),
+    ]
+    invoice_number = models.CharField(max_length=20, unique=True, blank=True)
+    service_request = models.OneToOneField(ServiceRequest, on_delete=models.CASCADE, related_name='invoice')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='unpaid')
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def generate_invoice_number(self):
+        year = timezone.now().year
+        last_inv = ServiceInvoice.objects.filter(invoice_number__startswith=f"INV-{year}").order_by("-id").first()
+        if last_inv:
+            last_number = int(last_inv.invoice_number.split("-")[-1])
+            new_number = last_number + 1
+        else:
+            new_number = 1
+        return f"INV-{year}-{new_number:06d}"
+
+    def save(self, *args, **kwargs):
+        if not self.invoice_number:
+            self.invoice_number = self.generate_invoice_number()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def sync_for_mission(cls, mission):
+        """Recompute (or remove) the invoice for a mission's service request based on its
+        current cost/cost_reason. Never touches status/paid_at on an existing invoice, so
+        recalculating the amount can't silently un-pay one."""
+        service_request = mission.service_request
+        if service_request is None or not mission.cost or mission.cost <= 0:
+            if service_request is not None:
+                cls.objects.filter(service_request=service_request).delete()
+            return None
+
+        invoice, _ = cls.objects.update_or_create(
+            service_request=service_request,
+            defaults={
+                'amount': mission.cost,
+                'reason': mission.cost_reason or '',
+            }
+        )
+        return invoice
+
+    def __str__(self):
+        return f"{self.invoice_number} - {self.service_request.card.number_card} - {self.amount}"
+
 class RequsetMission(models.Model):
     description = models.CharField(blank=True, null=True, max_length=50)
     driver = models.ForeignKey(Drivers, on_delete=models.CASCADE, null=True)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True)
     service = models.ForeignKey(Service, on_delete=models.SET_NULL, null=True, blank=True)  # NEW
-    date = models.DateField(null=True, blank=True)
+    date = models.DateTimeField(null=True, blank=True)
     from_location = models.CharField(null=True, blank=True, max_length=50)
     to_location = models.CharField(null=True, blank=True, max_length=50)
     cost = models.DecimalField(max_digits=10, decimal_places=2, null=True)
+    cost_reason = models.CharField(blank=True, null=True, max_length=255, help_text="Reason for the additional cost, e.g. 'towing beyond included distance'")
     notes = models.CharField(blank=True, null=True, max_length=500)
     receipt = models.CharField(null=True, blank=True, max_length=20)
     scost = models.CharField(null=True, blank=True, max_length=100)
@@ -183,3 +270,16 @@ from django.utils import timezone
 class UserLastSeen(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='last_seen')
     last_request_time = models.DateTimeField(default=timezone.now)
+
+class FCMToken(models.Model):
+    """A registered Firebase Cloud Messaging web-push token.
+    Staff tokens are tied to a logged-in User (notified on new service requests).
+    Customer tokens are tied to the specific ServiceRequest they submitted, since
+    customers never log in (notified when a mission/driver is assigned to it)."""
+    token = models.CharField(max_length=255, unique=True)
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE, related_name='fcm_tokens')
+    service_request = models.ForeignKey(ServiceRequest, null=True, blank=True, on_delete=models.CASCADE, related_name='fcm_tokens')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"FCMToken(user={self.user_id}, request={self.service_request_id})"

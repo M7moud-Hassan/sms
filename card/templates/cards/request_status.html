@@ -34,6 +34,14 @@
                         </div>
                     </div>
                 </div>
+                {% if request.mission and request.mission.driver %}
+                <div id="driver-info" class="alert alert-success mt-3">
+                    <i class="bi bi-person-badge"></i> <strong>Driver assigned:</strong> {{ request.mission.driver.name }}
+                    {% if request.mission.driver.phone %}
+                        — <a href="tel:{{ request.mission.driver.phone }}">{{ request.mission.driver.phone }}</a>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <div class="mt-4 text-center">
                     <a href="javascript:window.print()" class="btn btn-outline-secondary"><i class="bi bi-printer"></i> Print</a>
                 </div>
@@ -41,4 +49,64 @@
         </div>
     </div>
 </div>
+
+<script>
+(function() {
+    const firebaseConfig = {{ firebase_web_config_json|safe }};
+    if (!firebaseConfig.apiKey || !('serviceWorker' in navigator) || !('Notification' in window)) {
+        return;  // Firebase not configured yet, or unsupported browser
+    }
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const messaging = firebase.messaging();
+
+    function playNotificationSound() {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.3);
+    }
+
+    navigator.serviceWorker.register('/firebase-messaging-sw.js').then(function(registration) {
+        Notification.requestPermission().then(function(permission) {
+            if (permission !== 'granted') return;
+            messaging.getToken({
+                vapidKey: '{{ firebase_vapid_key }}',
+                serviceWorkerRegistration: registration
+            }).then(function(token) {
+                if (!token) return;
+                fetch('{% url "register_fcm_token" %}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token, service_request_id: {{ request.pk }} })
+                }).catch(err => console.error('FCM token registration failed:', err));
+            }).catch(err => console.error('FCM getToken failed:', err));
+        });
+    }).catch(err => console.error('Service worker registration failed:', err));
+
+    // Foreground message (tab open): play a sound and show the driver's info inline immediately.
+    messaging.onMessage(function(payload) {
+        playNotificationSound();
+        if (payload.data && payload.data.type === 'mission_assigned') {
+            let box = document.getElementById('driver-info');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'driver-info';
+                box.className = 'alert alert-success mt-3';
+                document.querySelector('.card-body').appendChild(box);
+            }
+            box.innerHTML = '<i class="bi bi-person-badge"></i> <strong>Driver assigned:</strong> ' +
+                (payload.data.driver_name || '') + ' — <a href="tel:' + (payload.data.driver_phone || '') + '">' +
+                (payload.data.driver_phone || '') + '</a>';
+        }
+    });
+})();
+</script>
 {% endblock %}

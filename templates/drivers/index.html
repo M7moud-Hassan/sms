@@ -75,7 +75,7 @@
                 <div class="dropdown-menu dropdown-menu-right">
                     <a class="dropdown-item add-button" href="{% url 'missions_index' driver.id %}">Required Missions</a>
                     <div class="dropdown-divider"></div>
-                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ driver.id }}" data-name="{{ driver.name }}" data-status="{{ driver.status }}" data-username="{{ driver.username }}" data-password="{{ driver.password }}">Edit Driver Data</a>
+                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ driver.id }}" data-name="{{ driver.name }}" data-status="{{ driver.status }}" data-phone="{{ driver.phone|default:'' }}" data-username="{{ driver.username }}" data-password="{{ driver.password }}">Edit Driver Data</a>
                     {% if driver.balance > 0 %}
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item add-button" href="#" data-toggle="modal" data-target="#addTreasury" data-id="{{ driver.id }}" data-name="{{ driver.name }}" data-amount="{{ driver.balance }}">Pay to Treasury</a>
@@ -174,6 +174,11 @@
                         </div>
                         <br>
                         <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="phone">Phone</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="phone" name="phone">
+                        </div>
+                        <br>
+                        <div class="form-group">
                             <label style="color: darkblue; font-weight: bold;" for="username">Username</label>
                             <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="user" name="username" required>
                         </div>
@@ -216,6 +221,11 @@
                             <option>Available</option>
                             <option>Not Available</option>
                         </select>
+                        </div>
+                        <br>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-phone">Phone</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="edit-phone" name="phone">
                         </div>
                         <br>
                         <div class="form-group">
@@ -451,11 +461,13 @@
         var id = $(this).data('id');
         var name = $(this).data('name');
         var status = $(this).data('status');
+        var phone = $(this).data('phone');
         var username = $(this).data('username');
         var password = $(this).data('password');
         $('#edit-id').val(id);
         $('#edit-name').val(name);
         $('#edit-status').val(status);
+        $('#edit-phone').val(phone);
         $('#edit-username').val(username);
         $('#edit-password').val(password);
         var action = $('#editForm').attr('action').replace('0', id);

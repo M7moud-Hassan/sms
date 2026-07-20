@@ -11,6 +11,7 @@ from customers.models import Customers
 class Drivers(models.Model):
     name = models.CharField(unique=True, null=True, max_length=200)
     status = models.CharField(null=True, blank=True, max_length=20, default="Available")
+    phone = models.CharField(null=True, blank=True, max_length=20)
     username = models.CharField(null=True, max_length=20)
     password = models.CharField(null=True, max_length=20)
     balance = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

@@ -7,6 +7,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework import permissions
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from card.views import firebase_messaging_sw
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -22,6 +23,8 @@ schema_view = get_schema_view(
 )
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Served from the root (not under /card/) so its default scope covers the whole site.
+    path('firebase-messaging-sw.js', firebase_messaging_sw, name='firebase_messaging_sw'),
     path('', include('balances.urls')),
     path('customers/', include('customers.urls')),
     path('invoices/', include('invoices.urls')),

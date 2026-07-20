@@ -6,3 +6,6 @@ Scripts/
 venv/
 ssl/
 media/
+
+# Firebase service account key (secret - server-side push credentials)
+firebase-service-account.json

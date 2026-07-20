@@ -41,6 +41,21 @@
                                     <div class="form-text text-muted small">Select a category to load its services.</div>
                                 </div>
                                 <div class="mb-2">
+                                    <label for="modal_showroom" class="form-label fw-semibold">Showroom</label>
+                                    <div class="input-group">
+                                        <select name="showroom" id="modal_showroom" class="form-select">
+                                            <option value="">-- None (Individual card) --</option>
+                                            {% for showroom in showrooms %}
+                                                <option value="{{ showroom.pk }}">{{ showroom.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addShowroomModal" title="Add new showroom">
+                                            <i class="bi bi-plus-lg"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text text-muted small">Leave as "Individual" unless this card is a gift from a showroom.</div>
+                                </div>
+                                <div class="mb-2">
                                     <label for="modal_vehicle_number" class="form-label fw-semibold">Vehicle Number</label>
                                     <input type="text" name="vehicle_number" id="modal_vehicle_number" class="form-control">
                                 </div>
@@ -79,10 +94,7 @@
                             <div class="bg-light p-3 rounded">
                                 <h6 class="fw-bold text-success border-bottom pb-2"><i class="bi bi-gift"></i> Service Quotas</h6>
                                 <p class="small text-muted">
-                                    Initial quota is set to <strong>1</strong> per service.
-                                    {% if not request.user.is_superuser %}
-                                    <span class="text-warning"><i class="bi bi-lock-fill"></i> Quota can only be changed by a super admin.</span>
-                                    {% endif %}
+                                    Quota is pre-filled from the category's default — adjust it per service as needed.
                                 </p>
                                 <div id="modal-service-list-container">
                                     <div class="text-center text-muted py-4">
@@ -107,8 +119,6 @@
     (function() {
         const modal = document.getElementById('addCardWithQuotaModal');
         if (!modal) return;
-
-        const isSuperAdmin = {{ request.user.is_superuser|yesno:"true,false" }};
 
         const endAtInput = document.getElementById('modal_end_at');
         if (endAtInput && !endAtInput.value) {
@@ -161,7 +171,7 @@
                                
                                 <td>
                                     <input type="hidden" name="service_id[]" value="${service.id}">
-                                    <input type="number" name="quota[]" class="form-control form-control-sm" min="1" value="${service.default_quota}" style="width: 100px;" ${!isSuperAdmin ? 'readonly title="Only super admins can change the quota"' : ''}>
+                                    <input type="number" name="quota[]" class="form-control form-control-sm" min="1" value="${service.default_quota}" style="width: 100px;">
                                 </td>
                             </tr>
                         `;
@@ -182,6 +192,12 @@
 
         document.addEventListener('customerAdded', function(e) {
             const select = document.getElementById('modal_customer');
+            const option = new Option(e.detail.name, e.detail.id, true, true);
+            select.add(option);
+        });
+
+        document.addEventListener('showroomAdded', function(e) {
+            const select = document.getElementById('modal_showroom');
             const option = new Option(e.detail.name, e.detail.id, true, true);
             select.add(option);
         });

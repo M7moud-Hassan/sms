@@ -26,6 +26,8 @@
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
     </head>
   <body>
     {% include 'parts/nav.html' %}
@@ -103,11 +105,44 @@
             });
         });
 
-        // فحص كل 5 ثوانٍ
+        // فحص كل 5 ثوانٍ (طبقة احتياطية لو الـ push اتأخر أو فشل)
         setInterval(checkNewRequests, 5000);
 
         // فحص فوري عند تحميل الصفحة
         checkNewRequests();
+
+        // ---------- Firebase push (instant layer on top of the polling above) ----------
+        (function setupStaffPush() {
+            const firebaseConfig = {{ firebase_web_config_json|safe }};
+            if (!firebaseConfig.apiKey || !('serviceWorker' in navigator) || !('Notification' in window)) {
+                return;  // Firebase not configured yet, or unsupported browser
+            }
+            firebase.initializeApp(firebaseConfig);
+            const messaging = firebase.messaging();
+
+            navigator.serviceWorker.register('/firebase-messaging-sw.js').then(function(registration) {
+                Notification.requestPermission().then(function(permission) {
+                    if (permission !== 'granted') return;
+                    messaging.getToken({
+                        vapidKey: '{{ firebase_vapid_key }}',
+                        serviceWorkerRegistration: registration
+                    }).then(function(token) {
+                        if (!token) return;
+                        fetch('{% url "register_fcm_token" %}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: token })
+                        }).catch(err => console.error('FCM token registration failed:', err));
+                    }).catch(err => console.error('FCM getToken failed:', err));
+                });
+            }).catch(err => console.error('Service worker registration failed:', err));
+
+            // Foreground message: play the same bell sound and refresh the count immediately.
+            messaging.onMessage(function(payload) {
+                playBellSound();
+                checkNewRequests();
+            });
+        })();
         {% endif %}
     })();
 </script>

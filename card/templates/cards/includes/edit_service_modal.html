@@ -32,6 +32,13 @@
                             <option value="2" {% if service.location_type == 2 %}selected{% endif %}>Pickup and Dropoff</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <label for="service_default_quota_{{ service.pk }}" class="form-label fw-bold">Default Quota</label>
+                        <input type="number" min="1" name="default_quota" id="service_default_quota_{{ service.pk }}"
+                               class="form-control" placeholder="Uses category default ({{ service.category.default_quota }})"
+                               value="{{ service.default_quota|default_if_none:'' }}">
+                        <div class="form-text">Leave blank to use the category's default quota ({{ service.category.default_quota }}).</div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

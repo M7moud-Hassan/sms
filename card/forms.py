@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 import re
 
 from drivers.models import Drivers
-from .models import Customer, Card, CategoryCard, RequsetMission, Service, ServiceQuota, ServiceRequest
+from .models import Customer, Card, CategoryCard, RequsetMission, Service, ServiceQuota, ServiceRequest, Showroom
 from django.forms import inlineformset_factory
 
 VIN_RE = re.compile(r'^[0-9A-HJ-NPR-Z]{17}$')
@@ -28,10 +28,11 @@ class CustomerForm(forms.ModelForm):
 class CardForm(forms.ModelForm):
     class Meta:
         model = Card
-        fields = ['customer', 'category', 'vehicle_number', 'chassis_number', 'type_car', 'color_car', 'end_at', 'is_active']
+        fields = ['customer', 'category', 'showroom', 'vehicle_number', 'chassis_number', 'type_car', 'color_car', 'end_at', 'is_active']
         widgets = {
             'customer': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select', 'data-category-id': ''}),
+            'showroom': forms.Select(attrs={'class': 'form-select'}),
             'vehicle_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ABC-123'}),
             'chassis_number': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -52,10 +53,21 @@ class CardForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['customer'].queryset = Customer.objects.all().order_by('name')
         self.fields['category'].queryset = CategoryCard.objects.all().order_by('name')
+        self.fields['showroom'].queryset = Showroom.objects.all().order_by('name')
+        self.fields['showroom'].required = False
+        self.fields['showroom'].empty_label = "-- None (Individual card) --"
         self.fields['end_at'].required = False
         self.fields['is_active'].label = "Active card"
         self.fields['chassis_number'].validators.append(validate_vin)
         self.fields['chassis_number'].required = False
+
+class ShowroomForm(forms.ModelForm):
+    class Meta:
+        model = Showroom
+        fields = ['name']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Showroom name'}),
+        }
 ServiceQuotaFormSet = inlineformset_factory(
     Card,
     ServiceQuota,
@@ -84,12 +96,13 @@ class CategoryForm(forms.ModelForm):
 class ServiceForm(forms.ModelForm):
     class Meta:
         model = Service
-        fields = ['name', 'description', 'location_type', 'category']
+        fields = ['name', 'description', 'location_type', 'category', 'default_quota']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
             'location_type': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
+            'default_quota': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'placeholder': 'Uses category default'}),
         }
 
 class BonusQuotaForm(forms.ModelForm):
@@ -113,18 +126,25 @@ class BonusQuotaForm(forms.ModelForm):
 class ServiceRequestForm(forms.ModelForm):
     class Meta:
         model = ServiceRequest
-        fields = ['service', 'notes', 'from_location', 'to_location','contact_phone']  # أضفنا الحقلين
+        fields = ['service', 'notes', 'from_location', 'to_location', 'contact_phone',
+                  'latitude', 'longitude', 'location_accuracy']  # أضفنا الحقلين + موقع العميل
         widgets = {
             'service': forms.Select(attrs={'class': 'form-select'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
             'from_location': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Pickup location'}),
             'to_location': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Dropoff location'}),
             'contact_phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter contact phone number'}),
+            'latitude': forms.HiddenInput(),
+            'longitude': forms.HiddenInput(),
+            'location_accuracy': forms.HiddenInput(),
         }
 
     def __init__(self, *args, **kwargs):
         self.card = kwargs.pop('card', None)
         super().__init__(*args, **kwargs)
+        self.fields['latitude'].required = False
+        self.fields['longitude'].required = False
+        self.fields['location_accuracy'].required = False
         if self.card:
             # تقتصر الخدمات على تلك التي لها رصيد > 0 لهذه البطاقة
             self.fields['service'].queryset = Service.objects.filter(
@@ -143,18 +163,24 @@ class RequestStatusUpdateForm(forms.ModelForm):
 
 
 class MissionForm(forms.ModelForm):
+    date = forms.DateTimeField(
+        required=False,
+        input_formats=['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'],
+        widget=forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
+    )
+
     class Meta:
         model = RequsetMission
         fields = [
             'driver', 'date', 'from_location', 'to_location',
-            'cost', 'notes', 'receipt', 'scost', 'count', 'accept'
+            'cost', 'cost_reason', 'notes', 'receipt', 'scost', 'count', 'accept'
         ]
         widgets = {
             'driver': forms.Select(attrs={'class': 'form-select'}),
-            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'from_location': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Pickup'}),
             'to_location': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Dropoff'}),
             'cost': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'cost_reason': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. towing beyond included distance'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
             'receipt': forms.TextInput(attrs={'class': 'form-control'}),
             'scost': forms.TextInput(attrs={'class': 'form-control'}),

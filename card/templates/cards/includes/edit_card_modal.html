@@ -30,6 +30,22 @@
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
+                            <label for="id_showroom_{{ card.pk }}" class="form-label fw-bold">Showroom</label>
+                            <div class="input-group">
+                                <select name="showroom" id="id_showroom_{{ card.pk }}" class="form-select">
+                                    <option value="">-- None (Individual card) --</option>
+                                    {% for showroom in showrooms %}
+                                    <option value="{{ showroom.pk }}" {% if card.showroom and card.showroom.pk == showroom.pk %}selected{% endif %}>{{ showroom.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addShowroomModal" title="Add new showroom">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
                             <label for="id_vehicle_number_{{ card.pk }}" class="form-label fw-bold">Vehicle Number</label>
                             <input type="text" name="vehicle_number" id="id_vehicle_number_{{ card.pk }}" class="form-control" value="{{ card.vehicle_number|default:'' }}">
                         </div>
@@ -71,6 +87,16 @@
 </div>
 <script>
     (function() {
+        const modalEl = document.getElementById('editCardModal{{ card.pk }}');
+        document.addEventListener('showroomAdded', function(e) {
+            // Multiple edit-card modals share the one #addShowroomModal, so only apply
+            // the new option to this row's select if this row's modal is the one open.
+            if (!modalEl.classList.contains('show')) return;
+            const select = document.getElementById('id_showroom_{{ card.pk }}');
+            const option = new Option(e.detail.name, e.detail.id, true, true);
+            select.add(option);
+        });
+
         const form = document.getElementById('editCardForm{{ card.pk }}');
         if (form) {
             form.addEventListener('submit', function(e) {

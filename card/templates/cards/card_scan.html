@@ -14,15 +14,14 @@
             font-family: 'Inter', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             padding: 20px;
             margin: 0;
+            box-sizing: border-box;
         }
         .scan-card {
             max-width: 700px;
             width: 100%;
+            margin: 0 auto;
             border: none;
             border-radius: 20px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.2);
@@ -114,7 +113,7 @@
     </style>
 </head>
 <body>
-    <div class="container d-flex justify-content-center">
+    <div class="container">
         <div class="card scan-card">
             <!-- Header with icon -->
             <div class="card-header-gradient d-flex align-items-center">
@@ -128,7 +127,7 @@
             <div class="card-body-custom">
                 <div class="row align-items-center">
                     <!-- QR Code section -->
-                    <div class="col-md-4 text-center mb-4 mb-md-0">
+                    <div class="col-12 col-md-4 text-center mb-4 mb-md-0">
                         <div class="qr-code">
                             {% if card.qr_code %}
                                 <img src="{{ card.qr_code.url }}" alt="QR Code">
@@ -139,7 +138,7 @@
                         </div>
                     </div>
                     <!-- Card info -->
-                    <div class="col-md-8">
+                    <div class="col-12 col-md-8">
                         <h4 class="text-primary fw-bold mb-3">{{ card.number_card }}</h4>
                         <div class="d-flex mb-2">
                             <span class="card-detail-label"><i class="bi bi-person-circle me-1"></i> Customer:</span>
@@ -178,8 +177,15 @@
                 <div class="request-section">
                     <h5 class="mb-3"><i class="bi bi-gear-fill me-2"></i>Request a Service</h5>
                     {% if quotas %}
-                        <form method="post" action="{% url 'submit_request' card.pk %}" id="requestForm">
+                        <form method="post" action="{% url 'submit_request' card.uuid %}" id="requestForm">
                             {% csrf_token %}
+                            <input type="hidden" name="latitude" id="id_latitude">
+                            <input type="hidden" name="longitude" id="id_longitude">
+                            <input type="hidden" name="location_accuracy" id="id_location_accuracy">
+                            <div id="location-status" class="alert alert-light border small d-flex align-items-center gap-2 mb-3">
+                                <i class="bi bi-geo-alt-fill text-primary"></i>
+                                <span id="location-status-text">جارٍ تحديد موقعك لتسريع وصول الخدمة إليك...</span>
+                            </div>
                             <div class="mb-3">
                                 <label for="id_service" class="form-label fw-600">Select available service *</label>
                                 <select name="service" id="id_service" class="form-select service-select" required>
@@ -187,7 +193,8 @@
                                     {% for quota in quotas %}
                                         <option value="{{ quota.service.pk }}"
                                                 data-remaining="{{ quota.remaining_uses }}"
-                                                data-description="{{ quota.service.description|default:'' }}">
+                                                data-description="{{ quota.service.description|default:'' }}"
+                                                data-location-type="{{ quota.service.location_type }}">
                                             {{ quota.service.name }} ({{ quota.remaining_uses }} left)
                                         </option>
                                     {% endfor %}
@@ -206,10 +213,23 @@
                                 </div>
                             </div>
 
-                            <div class="mb-4">
+                            <!-- Location fields: one input for a single-location service, two for pickup+dropoff -->
+                            <div id="location-fields" class="d-none">
+                                <div class="mb-3">
+                                    <label id="from-location-label" for="id_from_location" class="form-label fw-600">Location *</label>
+                                    <input type="text" name="from_location" id="id_from_location" class="form-control"
+                                           placeholder="e.g. Amman - Abdali">
+                                </div>
+                                <div class="mb-3 d-none" id="to-location-group">
+                                    <label for="id_to_location" class="form-label fw-600">Dropoff location *</label>
+                                    <input type="text" name="to_location" id="id_to_location" class="form-control"
+                                           placeholder="Dropoff location" disabled>
+                                </div>
+                            </div>
+
                             <div class="mb-4">
                                 <label for="id_notes" class="form-label fw-600">Additional notes (optional)</label>
-                                <textarea name="notes" id="id_notes" class="form-control" 
+                                <textarea name="notes" id="id_notes" class="form-control"
                                           rows="3" placeholder="e.g., vehicle issues, special requests..."></textarea>
                             </div>
                             <button type="submit" class="btn btn-submit text-white w-100 btn-lg">
@@ -238,6 +258,34 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         (function() {
+            const statusText = document.getElementById('location-status-text');
+            const statusBox = document.getElementById('location-status');
+
+            function captureLocation() {
+                if (!statusText) return;
+                if (!navigator.geolocation) {
+                    statusText.textContent = 'متصفحك لا يدعم تحديد الموقع، يمكنك المتابعة بدون ذلك.';
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    function(pos) {
+                        // Rounded to 6 decimal places to match the server's DecimalField(max_digits=9, decimal_places=6) —
+                        // raw JS float precision has too many decimal digits and fails that validation.
+                        document.getElementById('id_latitude').value = pos.coords.latitude.toFixed(6);
+                        document.getElementById('id_longitude').value = pos.coords.longitude.toFixed(6);
+                        document.getElementById('id_location_accuracy').value = pos.coords.accuracy;
+                        statusText.textContent = 'تم تحديد موقعك بنجاح ✓';
+                        statusBox.classList.remove('alert-light');
+                        statusBox.classList.add('alert-success');
+                    },
+                    function() {
+                        statusText.textContent = 'تعذّر تحديد موقعك (اختياري) — يمكنك إكمال الطلب بدونه.';
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                );
+            }
+            captureLocation();
+
             const serviceSelect = document.getElementById('id_service');
             const descBox = document.getElementById('service-description-box');
             const descText = document.getElementById('service-description-text');
@@ -250,6 +298,37 @@
                         descBox.classList.remove('d-none');
                     } else {
                         descBox.classList.add('d-none');
+                    }
+                });
+            }
+
+            // Show one location input for a "Single Location" service, two for "Pickup and Dropoff".
+            const locationFields = document.getElementById('location-fields');
+            const fromLabel = document.getElementById('from-location-label');
+            const fromInput = document.getElementById('id_from_location');
+            const toGroup = document.getElementById('to-location-group');
+            const toInput = document.getElementById('id_to_location');
+            if (serviceSelect && locationFields) {
+                serviceSelect.addEventListener('change', function() {
+                    const selected = this.options[this.selectedIndex];
+                    const locationType = selected.dataset.locationType;
+                    if (!locationType) {
+                        locationFields.classList.add('d-none');
+                        return;
+                    }
+                    locationFields.classList.remove('d-none');
+                    fromInput.required = true;
+                    if (locationType === '2') {
+                        fromLabel.textContent = 'Pickup location *';
+                        toGroup.classList.remove('d-none');
+                        toInput.disabled = false;
+                        toInput.required = true;
+                    } else {
+                        fromLabel.textContent = 'Location *';
+                        toGroup.classList.add('d-none');
+                        toInput.disabled = true;
+                        toInput.required = false;
+                        toInput.value = '';
                     }
                 });
             }
@@ -271,11 +350,18 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            // Extract the numeric ID from request_number (REQ-2025-000123)
-                            const requestId = data.request_number.split('-').pop();
-                            window.location.href = "{% url 'request_status' 0 %}".replace('0', requestId);
+                            window.location.href = "{% url 'request_status' 0 %}".replace('0', data.request_id);
                         } else {
-                            alert('Submission failed. Please check your selection and try again.');
+                            console.error('Validation errors:', data.errors);
+                            let msg = 'Submission failed. Please check your selection and try again.';
+                            if (data.errors) {
+                                const details = Object.entries(data.errors).map(function([field, errs]) {
+                                    const text = Array.isArray(errs) ? errs.map(function(e) { return e.message || e; }).join(', ') : errs;
+                                    return field + ': ' + text;
+                                }).join('\n');
+                                if (details) msg += '\n\n' + details;
+                            }
+                            alert(msg);
                             submitBtn.innerHTML = originalText;
                             submitBtn.disabled = false;
                         }
