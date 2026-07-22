@@ -15,7 +15,7 @@
 
             <!-- Main Navigation Links -->
             <a href="{% url 'customer_list' %}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-people"></i> Customers
+                <i class="bi bi-people"></i> Cardholders
             </a>
             <a href="{% url 'card_list' %}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-credit-card-2-front"></i> Cards
@@ -28,6 +28,9 @@
             </a>
             <a href="{% url 'invoice_list' %}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-receipt"></i> Invoices
+            </a>
+            <a href="{% url 'card_payments' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-cash-coin"></i> Customers
             </a>
 
             <!-- Reports Dropdown -->
@@ -140,7 +143,7 @@
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
-                        <div class="text-xs text-secondary text-uppercase fw-bold mb-1">Total Customers</div>
+                        <div class="text-xs text-secondary text-uppercase fw-bold mb-1">Total Cardholders</div>
                         <div class="h5 mb-0 fw-bold text-gray-800">{{ total_customers }}</div>
                     </div>
                     <div class="col-auto"><i class="bi bi-people fs-2 text-gray-300"></i></div>
@@ -175,7 +178,7 @@
         </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-4">
-        <a href="{% url 'invoice_list' %}?status=unpaid" class="text-decoration-none">
+        <a href="{% url 'invoice_list' %}?quick_filter=unpaid" class="text-decoration-none">
         <div class="card border-start border-danger border-4 shadow h-100 py-2">
             <div class="card-body">
                 <div class="row align-items-center">
@@ -208,7 +211,7 @@
         <thead class="table-dark">
             <tr>
                 <th>Card #</th>
-                <th>Customer</th>
+                <th>Cardholder</th>
                 <th>Vehicle</th>
                 <th>Issued</th>
                 <th>Expires</th>

@@ -93,25 +93,130 @@ class CustomerListView(LoginRequiredMixin, ListView):
     context_object_name = 'customers'
     paginate_by = 20
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
+    def get_base_queryset(self):
+        queryset = Customer.objects.prefetch_related('cards__category')
         q = self.request.GET.get('q', '')
         if q:
             queryset = queryset.filter(
                 Q(name__icontains=q) |
                 Q(phone__icontains=q) |
-                Q(email__icontains=q)
+                Q(email__icontains=q) |
+                Q(notes__icontains=q)
             )
+        payment = self.request.GET.get('payment')
+        if payment in (Customer.PAYMENT_CASH, Customer.PAYMENT_CREDIT):
+            queryset = queryset.filter(payment=payment)
         return queryset
+
+    def get_queryset(self):
+        # balance is computed (not a DB column), so filtering/sorting on it happens
+        # in Python once the (already DB-filtered) rows are fetched.
+        customers = list(self.get_base_queryset())
+        for c in customers:
+            c.computed_balance = c.balance
+        balance_filter = self.request.GET.get('balance')
+        if balance_filter == 'due':
+            customers = [c for c in customers if c.computed_balance > 0]
+        elif balance_filter == 'settled':
+            customers = [c for c in customers if c.computed_balance <= 0]
+        customers.sort(key=lambda c: c.computed_balance, reverse=True)
+        return customers
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['query_params'] = self.request.GET.copy()
         if 'page' in context['query_params']:
             del context['query_params']['page']
-        context['active_tab'] ='cards'
-        
+        context['active_tab'] = 'cards'
+
+        all_customers = self.get_base_queryset()
+        context['total_count'] = all_customers.count()
+        balances = [c.balance for c in all_customers]
+        context['due_count'] = sum(1 for b in balances if b > 0)
+        context['total_due'] = sum(b for b in balances if b > 0)
         return context
+
+
+class CustomerBalanceView(LoginRequiredMixin, DetailView):
+    """Cardholder statement: outstanding balance broken down into unpaid card prices
+    and unpaid service-overage invoices, with a date range filter and CSV export."""
+    model = Customer
+    template_name = 'cards/customer_balance.html'
+    context_object_name = 'customer'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        customer = self.object
+        start_date = self.request.GET.get('start')
+        end_date = self.request.GET.get('end')
+
+        cards = customer.cards.select_related('category').order_by('-created_at')
+        if start_date:
+            cards = cards.filter(created_at__date__gte=start_date)
+        if end_date:
+            cards = cards.filter(created_at__date__lte=end_date)
+
+        invoices = ServiceInvoice.objects.filter(
+            service_request__card__customer=customer
+        ).select_related('service_request', 'service_request__card', 'service_request__service').order_by('-created_at')
+        if start_date:
+            invoices = invoices.filter(created_at__date__gte=start_date)
+        if end_date:
+            invoices = invoices.filter(created_at__date__lte=end_date)
+
+        card_total = sum((c.category.price if c.category else 0) for c in cards)
+        card_paid = sum((c.category.price if c.category else 0) for c in cards if c.is_paid)
+        invoices_total = invoices.aggregate(total=Sum('amount'))['total'] or 0
+        invoices_paid = invoices.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
+
+        context['cards'] = cards
+        context['invoices'] = invoices
+        context['total_charges'] = card_total + invoices_total
+        context['total_paid'] = card_paid + invoices_paid
+        context['outstanding_balance'] = customer.balance
+        context['active_tab'] = 'cards'
+        return context
+
+
+import csv
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def export_cardholder_statement(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    start_date = request.GET.get('start')
+    end_date = request.GET.get('end')
+
+    cards = customer.cards.select_related('category').order_by('created_at')
+    if start_date:
+        cards = cards.filter(created_at__date__gte=start_date)
+    if end_date:
+        cards = cards.filter(created_at__date__lte=end_date)
+
+    invoices = ServiceInvoice.objects.filter(
+        service_request__card__customer=customer
+    ).select_related('service_request__card', 'service_request__service').order_by('created_at')
+    if start_date:
+        invoices = invoices.filter(created_at__date__gte=start_date)
+    if end_date:
+        invoices = invoices.filter(created_at__date__lte=end_date)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{customer.name}_statement.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Type', 'Reference', 'Description', 'Amount', 'Status', 'Date'])
+    for c in cards:
+        writer.writerow([
+            'Card', c.number_card, c.category.name if c.category else '',
+            c.category.price if c.category else 0, 'Paid' if c.is_paid else 'Unpaid',
+            c.created_at.strftime('%Y-%m-%d'),
+        ])
+    for inv in invoices:
+        writer.writerow([
+            'Service Invoice', inv.invoice_number, inv.service_request.service.name,
+            inv.amount, inv.get_status_display(), inv.created_at.strftime('%Y-%m-%d'),
+        ])
+    return response
 
 class CustomerCreateView(LoginRequiredMixin, CreateView):
     model = Customer
@@ -213,6 +318,77 @@ class CardListView(LoginRequiredMixin, ListView):
         context['active_tab'] ='cards'
 
         return context
+
+class CardPaymentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Card
+    template_name = 'cards/card_payments.html'
+    context_object_name = 'cards'
+    paginate_by = 20
+
+    def test_func(self):
+        return self.request.user.is_staff
+
+    def get_queryset(self):
+        queryset = Card.objects.select_related('customer', 'category', 'showroom').order_by('-created_at')
+        q = self.request.GET.get('q', '')
+        if q:
+            queryset = queryset.filter(
+                Q(number_card__icontains=q) |
+                Q(customer__name__icontains=q) |
+                Q(vehicle_number__icontains=q) |
+                Q(showroom__name__icontains=q)
+            )
+        pay_by = self.request.GET.get('pay_by')
+        if pay_by == 'showroom':
+            queryset = queryset.filter(showroom__isnull=False)
+        elif pay_by == 'customer':
+            queryset = queryset.filter(showroom__isnull=True)
+        showroom_id = self.request.GET.get('showroom')
+        if showroom_id:
+            queryset = queryset.filter(showroom_id=showroom_id)
+        status = self.request.GET.get('status')
+        if status == 'paid':
+            queryset = queryset.filter(is_paid=True)
+        elif status == 'unpaid':
+            queryset = queryset.filter(is_paid=False)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['query_params'] = self.request.GET.copy()
+        if 'page' in context['query_params']:
+            del context['query_params']['page']
+        context['showrooms'] = Showroom.objects.all().order_by('name')
+        context['active_tab'] = 'cards'
+
+        filtered_cards = self.get_queryset()
+        context['total_count'] = filtered_cards.count()
+        context['paid_count'] = filtered_cards.filter(is_paid=True).count()
+        context['unpaid_count'] = filtered_cards.filter(is_paid=False).count()
+        context['total_value'] = sum((c.category.price if c.category else 0) for c in filtered_cards)
+        context['paid_value'] = sum((c.category.price if c.category else 0) for c in filtered_cards if c.is_paid)
+        context['unpaid_value'] = context['total_value'] - context['paid_value']
+        return context
+
+
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+
+@login_required
+@require_POST
+def toggle_card_paid(request, pk):
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'Staff only.'}, status=403)
+    card = get_object_or_404(Card, pk=pk)
+    card.is_paid = not card.is_paid
+    card.paid_at = timezone.now() if card.is_paid else None
+    card.save(update_fields=['is_paid', 'paid_at'])
+    return JsonResponse({
+        'success': True,
+        'is_paid': card.is_paid,
+        'paid_at': card.paid_at.strftime('%Y-%m-%d %H:%M') if card.paid_at else None,
+    })
+
 
 from django.shortcuts import get_object_or_404
 from django.views.generic.edit import CreateView, UpdateView
@@ -1011,6 +1187,49 @@ def send_test_notification(request):
 # ──────────────────────────────────────────────
 # SERVICE INVOICES (overage / metered usage billing)
 # ──────────────────────────────────────────────
+def _default_invoice_date_params(get_params):
+    """Defaults the date range to the trailing 7 days (matching the other Invoices
+    module's default view) when the user hasn't picked dates yet."""
+    params = get_params.copy()
+    if not params.get('start') and not params.get('end'):
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=6)
+        params['start'] = start_date.isoformat()
+        params['end'] = end_date.isoformat()
+    return params
+
+
+def _filter_service_invoices(queryset, params):
+    """Shared filtering for the invoice list page and its CSV export: free-text search,
+    date range, and a single 'quick_filter' radio value that is either a status
+    (unpaid/paid/cancelled) or a payment method (cash/cliq/bank_transfer/card) -
+    mirroring the single mutually-exclusive radio group in the original design this
+    page is styled after."""
+    q = params.get('q', '')
+    if q:
+        queryset = queryset.filter(
+            Q(invoice_number__icontains=q) |
+            Q(service_request__request_number__icontains=q) |
+            Q(service_request__card__number_card__icontains=q) |
+            Q(service_request__card__customer__name__icontains=q) |
+            Q(service_request__service__name__icontains=q) |
+            Q(service_request__card__vehicle_number__icontains=q) |
+            Q(reason__icontains=q)
+        )
+    quick_filter = params.get('quick_filter', 'all')
+    if quick_filter in dict(ServiceInvoice.STATUS_CHOICES):
+        queryset = queryset.filter(status=quick_filter)
+    elif quick_filter in dict(ServiceInvoice.PAYMENT_METHOD_CHOICES):
+        queryset = queryset.filter(payment_method=quick_filter)
+    start_date = params.get('start')
+    if start_date:
+        queryset = queryset.filter(created_at__date__gte=start_date)
+    end_date = params.get('end')
+    if end_date:
+        queryset = queryset.filter(created_at__date__lte=end_date)
+    return queryset
+
+
 class ServiceInvoiceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = ServiceInvoice
     template_name = 'cards/invoice_list.html'
@@ -1020,32 +1239,34 @@ class ServiceInvoiceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     def test_func(self):
         return self.request.user.is_staff
 
+    def get_effective_params(self):
+        if not hasattr(self, '_effective_params'):
+            self._effective_params = _default_invoice_date_params(self.request.GET)
+        return self._effective_params
+
     def get_queryset(self):
         queryset = super().get_queryset().select_related(
             'service_request', 'service_request__card', 'service_request__card__customer', 'service_request__service'
-        )
-        q = self.request.GET.get('q', '')
-        if q:
-            queryset = queryset.filter(
-                Q(invoice_number__icontains=q) |
-                Q(service_request__request_number__icontains=q) |
-                Q(service_request__card__number_card__icontains=q) |
-                Q(service_request__card__customer__name__icontains=q) |
-                Q(service_request__service__name__icontains=q)
-            )
-        status = self.request.GET.get('status')
-        if status:
-            queryset = queryset.filter(status=status)
-        return queryset
+        ).prefetch_related('service_request__mission__driver')
+        return _filter_service_invoices(queryset, self.get_effective_params())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['status_choices'] = ServiceInvoice.STATUS_CHOICES
-        context['query_params'] = self.request.GET.copy()
-        if 'page' in context['query_params']:
-            del context['query_params']['page']
+        context['payment_method_choices'] = ServiceInvoice.PAYMENT_METHOD_CHOICES
+        context['quick_filter'] = self.request.GET.get('quick_filter', 'all')
+        params = self.get_effective_params()
+        context['effective_start'] = params.get('start', '')
+        context['effective_end'] = params.get('end', '')
+        query_params = params.copy()
+        if 'page' in query_params:
+            del query_params['page']
+        context['query_params'] = query_params
         context['active_tab'] = 'cards'
-        context['unpaid_total'] = self.get_queryset().filter(status='unpaid').aggregate(total=Sum('amount'))['total'] or 0
+        all_invoices = self.get_queryset()
+        context['total_count'] = all_invoices.count()
+        context['total_amount'] = all_invoices.aggregate(total=Sum('amount'))['total'] or 0
+        context['unpaid_total'] = all_invoices.filter(status='unpaid').aggregate(total=Sum('amount'))['total'] or 0
         return context
 
 
@@ -1057,8 +1278,48 @@ def mark_invoice_paid(request, pk):
     invoice = get_object_or_404(ServiceInvoice, pk=pk)
     invoice.status = 'paid'
     invoice.paid_at = timezone.now()
+    method = request.POST.get('method')
+    if method in dict(ServiceInvoice.PAYMENT_METHOD_CHOICES):
+        invoice.payment_method = method
     invoice.save()
     return JsonResponse({'success': True})
+
+
+@login_required
+def export_invoices_csv(request):
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'Staff only.'}, status=403)
+
+    invoices = ServiceInvoice.objects.select_related(
+        'service_request', 'service_request__card', 'service_request__card__customer', 'service_request__service'
+    ).prefetch_related('service_request__mission__driver')
+    invoices = _filter_service_invoices(invoices, _default_invoice_date_params(request.GET))
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="Service_Invoices.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'Invoice #', 'Date', 'Card #', 'Cardholder', 'Vehicle No.', 'Service',
+        'Request #', 'Driver', 'Notes', 'Amount', 'Status', 'Payment Method',
+    ])
+    for inv in invoices:
+        mission = getattr(inv.service_request, 'mission', None)
+        driver_name = mission.driver.name if mission and mission.driver else ''
+        writer.writerow([
+            inv.invoice_number,
+            inv.created_at.strftime('%Y-%m-%d %H:%M'),
+            inv.service_request.card.number_card,
+            inv.service_request.card.customer.name,
+            inv.service_request.card.vehicle_number or '',
+            inv.service_request.service.name,
+            inv.service_request.request_number,
+            driver_name,
+            inv.reason,
+            inv.amount,
+            inv.get_status_display(),
+            inv.get_payment_method_display() if inv.payment_method else '',
+        ])
+    return response
 
 
 @login_required

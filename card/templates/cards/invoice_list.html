@@ -1,131 +1,306 @@
 {% extends 'base.html' %}
 {% block title %}Service Invoices{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2"><i class="bi bi-receipt"></i> Service Invoices</h1>
-    <span class="badge bg-danger fs-6">Unpaid total: ${{ unpaid_total|floatformat:2 }}</span>
+<style>
+    #invoiceTable th {
+        cursor: pointer;
+        position: relative;
+        padding-right: 20px;
+    }
+    #invoiceTable .arrow {
+        position: absolute;
+        right: 5px;
+        display: inline-block;
+    }
+    #invoiceTable .arrow.asc::after { content: "↑"; }
+    #invoiceTable .arrow.desc::after { content: "↓"; }
+    #invoiceTable .no-sort::after { content: "↕"; color: #cce4ff; }
+    .invoice-pagination .btn {
+        padding: 8px 12px;
+        text-decoration: none;
+        color: white;
+        background: linear-gradient(to right, #007bff, #0056b3);
+        border-radius: 6px;
+        font-weight: bold;
+        border: none;
+    }
+    .invoice-pagination .btn:hover {
+        background: linear-gradient(to right, #0056b3, #003d82);
+    }
+    .invoice-pagination .current-page {
+        font-size: 16px;
+        font-weight: bold;
+        padding: 6px 12px;
+        background-color: #f8f9fa;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        color: #333;
+    }
+</style>
+
+<div class="container-fluid" style="margin-top: 20px;">
+    <form method="get" id="invoiceFilterForm">
+        <div class="row align-items-end mb-1">
+            <!-- Left: dates, search, search/export buttons -->
+            <div class="col-md-8 col-lg-9">
+                <div class="d-flex flex-wrap align-items-center">
+                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
+                        <span class="input-group-text bg-primary text-white px-2">From</span>
+                        <input type="date" id="start" name="start" class="form-control" value="{{ effective_start }}" style="min-width: 150px;">
+                    </div>
+                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
+                        <span class="input-group-text bg-primary text-white px-2">To</span>
+                        <input type="date" id="end" name="end" class="form-control" value="{{ effective_end }}" style="min-width: 150px;">
+                    </div>
+                    <div class="me-3 mb-3">
+                        <input type="text" name="q" class="form-control" placeholder="Search Any Additional Field"
+                               value="{{ request.GET.q }}" style="height: 38px; min-width: 220px;">
+                    </div>
+                    <div class="d-flex mb-2 mb-md-0">
+                        <button type="submit" class="btn btn-primary me-2" style="min-width: 100px; height: 38px;">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                        <a href="{% url 'export_invoices_csv' %}?{{ request.GET.urlencode }}" class="btn btn-success" style="min-width: 100px; height: 38px;">
+                            <i class="bi bi-file-earmark-arrow-down"></i> Export
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: quick-filter radios -->
+            <div class="col-md-4 col-lg-3">
+                <div class="d-flex flex-wrap justify-content-center align-items-center">
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfAll" value="all" {% if quick_filter == 'all' %}checked{% endif %}>
+                        <label class="form-check-label" for="qfAll">All</label>
+                    </div>
+                    {% for value, label in status_choices %}
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfStatus{{ forloop.counter }}" value="{{ value }}" {% if quick_filter == value %}checked{% endif %}>
+                        <label class="form-check-label" for="qfStatus{{ forloop.counter }}">{{ label }}</label>
+                    </div>
+                    {% endfor %}
+                    <div class="w-100"></div>
+                    {% for value, label in payment_method_choices %}
+                    <div class="form-check form-check-inline mx-1">
+                        <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfMethod{{ forloop.counter }}" value="{{ value }}" {% if quick_filter == value %}checked{% endif %}>
+                        <label class="form-check-label" for="qfMethod{{ forloop.counter }}">{{ label }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </form>
 </div>
 
-<!-- Filter -->
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-5">
-                <label for="search" class="form-label fw-bold">Search</label>
-                <input type="text" name="q" id="search" class="form-control"
-                       placeholder="Invoice #, request #, card #, customer, service" value="{{ request.GET.q }}">
+<div id="itable1" class="scrollable-div" style="margin: 25px;">
+<table class="table" id="invoiceTable">
+  <thead>
+    <tr>
+      <th>Number <span class="arrow no-sort"></span></th>
+      <th>Invoice Date <span class="arrow no-sort"></span></th>
+      <th>Payment System <span class="arrow no-sort"></span></th>
+      <th>Cardholder <span class="arrow no-sort"></span></th>
+      <th>Amount <span class="arrow no-sort"></span></th>
+      <th>Vehicle No. <span class="arrow no-sort"></span></th>
+      <th>Driver Name <span class="arrow no-sort"></span></th>
+      <th>Status <span class="arrow no-sort"></span></th>
+      <th>Created at <span class="arrow no-sort"></span></th>
+      <th>Notes <span class="arrow no-sort"></span></th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for invoice in invoices %}
+  <tr>
+    <td class="align-middle">{{ invoice.invoice_number }}</td>
+    <td class="align-middle">{{ invoice.created_at|date:"Y-m-d" }}</td>
+    <td class="align-middle">{{ invoice.get_payment_method_display|default:"—" }}</td>
+    <td class="align-middle">{{ invoice.service_request.card.customer.name }}</td>
+    <td class="align-middle">${{ invoice.amount|floatformat:2 }}</td>
+    <td class="align-middle">{{ invoice.service_request.card.vehicle_number|default:"—" }}</td>
+    <td class="align-middle">{{ invoice.service_request.mission.driver.name|default:"—" }}</td>
+    <td class="align-middle">
+        <span class="badge bg-{% if invoice.status == 'paid' %}success{% elif invoice.status == 'cancelled' %}secondary{% else %}danger{% endif %}">
+            {{ invoice.get_status_display }}
+        </span>
+    </td>
+    <td class="align-middle">{{ invoice.created_at|date:"Y-m-d H:i" }}</td>
+    <td class="align-middle">{{ invoice.reason|default:"" }}</td>
+    <td class="align-middle text-nowrap">
+        <a href="{% url 'invoice_print' invoice.pk %}" target="_blank" class="btn btn-sm btn-outline-primary" title="Print">
+            <i class="bi bi-printer"></i>
+        </a>
+        {% if invoice.status == 'unpaid' %}
+        <button type="button" class="btn btn-sm btn-outline-success mark-paid-btn" data-invoice-id="{{ invoice.pk }}" title="Mark Paid">
+            <i class="bi bi-check-circle"></i>
+        </button>
+        {% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr>
+    <td colspan="11" class="text-center no-data-message" style="position: relative;">
+        <span class="no-data-text">No data available</span>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="container-fluid mb-3 px-0 px-md-2" style="margin-left: 20px;">
+  <div class="row g-2 g-md-3 align-items-center">
+    <!-- Count of Invoices -->
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+      <div class="input-group">
+        <span class="input-group-text bg-primary text-white">Count of Invoices</span>
+        <input type="text" class="form-control text-center" value="{{ total_count }}" readonly>
+      </div>
+    </div>
+
+    <!-- Total of Amounts -->
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+      <div class="input-group">
+        <span class="input-group-text bg-primary text-white">Total of Amounts</span>
+        <input type="text" class="form-control text-center" value="{{ total_amount|floatformat:2 }}" readonly>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="col-12 col-md-4 col-lg-6 d-flex justify-content-end">
+      <div class="invoice-pagination" style="margin-right: 30px;">
+        {% if page_obj.has_previous %}
+          <a href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page=1" class="btn">« First</a>
+          <a href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}" class="btn">‹ Prev</a>
+        {% endif %}
+        <span class="current-page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn">Next ›</a>
+          <a href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.paginator.num_pages }}" class="btn">Last »</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mark Paid Modal (captures how the invoice was settled) -->
+<div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="markPaidModalLabel"><i class="bi bi-check-circle"></i> Mark Invoice Paid</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="col-md-3">
-                <label for="status" class="form-label fw-bold">Status</label>
-                <select name="status" id="status" class="form-select">
-                    <option value="">All</option>
-                    {% for value, label in status_choices %}
-                    <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+            <div class="modal-body">
+                <label for="markPaidMethod" class="form-label fw-bold">Payment Method</label>
+                <select id="markPaidMethod" class="form-select">
+                    <option value="">-- Not specified --</option>
+                    {% for value, label in payment_method_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Apply</button>
-                <a href="{% url 'invoice_list' %}" class="btn btn-outline-secondary">Clear</a>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmMarkPaidBtn" class="btn btn-success">Confirm</button>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
-<!-- Invoices Table -->
-<div class="table-responsive">
-    <table class="table table-hover align-middle">
-        <thead class="table-dark">
-            <tr>
-                <th>Invoice #</th>
-                <th>Date</th>
-                <th>Card</th>
-                <th>Customer</th>
-                <th>Service</th>
-                <th>Request #</th>
-                <th>Reason</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for invoice in invoices %}
-            <tr>
-                <td>{{ invoice.invoice_number }}</td>
-                <td>{{ invoice.created_at|date:"Y-m-d H:i" }}</td>
-                <td>{{ invoice.service_request.card.number_card }}</td>
-                <td>{{ invoice.service_request.card.customer.name }}</td>
-                <td>{{ invoice.service_request.service.name }}</td>
-                <td><a href="{% url 'request_status' invoice.service_request.pk %}">{{ invoice.service_request.request_number }}</a></td>
-                <td>{{ invoice.reason|default:"—" }}</td>
-                <td class="fw-bold">${{ invoice.amount }}</td>
-                <td>
-                    <span class="badge bg-{% if invoice.status == 'paid' %}success{% elif invoice.status == 'cancelled' %}secondary{% else %}danger{% endif %}">
-                        {{ invoice.get_status_display }}
-                    </span>
-                </td>
-                <td class="text-nowrap">
-                    <a href="{% url 'invoice_print' invoice.pk %}" target="_blank" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-printer"></i> Print
-                    </a>
-                    {% if invoice.status == 'unpaid' %}
-                    <button type="button" class="btn btn-sm btn-outline-success mark-paid-btn" data-invoice-id="{{ invoice.pk }}">
-                        <i class="bi bi-check-circle"></i> Mark Paid
-                    </button>
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="10" class="text-center py-4 text-muted">No invoices found.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<!-- Pagination -->
-{% if is_paginated %}
-<nav aria-label="Page navigation">
-    <ul class="pagination justify-content-center">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
-        </li>
-        {% endif %}
-        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
-        {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
-        </li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
-
 <script>
+    // Auto-submit the filter form when a date or quick-filter radio changes.
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('invoiceFilterForm');
+        document.getElementById('start').addEventListener('change', () => form.submit());
+        document.getElementById('end').addEventListener('change', () => form.submit());
+        document.querySelectorAll('.quick-filter-radio').forEach(function(radio) {
+            radio.addEventListener('change', () => form.submit());
+        });
+
+        // Fit the table's scroll area to the viewport, like the rest of the CRM.
+        function setDynamicHeight() {
+            document.getElementById('itable1').style.height = (window.innerHeight * 0.55) + 'px';
+        }
+        setDynamicHeight();
+        window.addEventListener('resize', setDynamicHeight);
+
+        // Client-side column sorting (sorts only the rows on the current page).
+        const table = document.getElementById('invoiceTable');
+        const headers = table.querySelectorAll('th');
+        headers.forEach(function(header, index) {
+            if (index === headers.length - 1) return; // skip Actions column
+            header.addEventListener('click', function() { sortTable(index); });
+        });
+
+        function sortTable(columnIndex) {
+            let switching = true, dir = 'asc', switchCount = 0;
+            headers.forEach(function(h) {
+                const arrow = h.querySelector('.arrow');
+                if (arrow) arrow.className = 'arrow no-sort';
+            });
+            while (switching) {
+                switching = false;
+                const rows = table.rows;
+                for (let i = 1; i < rows.length - 1; i++) {
+                    const x = rows[i].getElementsByTagName('TD')[columnIndex];
+                    const y = rows[i + 1].getElementsByTagName('TD')[columnIndex];
+                    if (!x || !y) continue;
+                    let shouldSwitch = false;
+                    if (dir === 'asc') {
+                        if (isNaN(x.innerText) ? x.innerText.toLowerCase() > y.innerText.toLowerCase() : parseFloat(x.innerText) > parseFloat(y.innerText)) shouldSwitch = true;
+                    } else {
+                        if (isNaN(x.innerText) ? x.innerText.toLowerCase() < y.innerText.toLowerCase() : parseFloat(x.innerText) < parseFloat(y.innerText)) shouldSwitch = true;
+                    }
+                    if (shouldSwitch) {
+                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                        switching = true;
+                        switchCount++;
+                        break;
+                    }
+                }
+                if (!switching && switchCount === 0 && dir === 'asc') { dir = 'desc'; switching = true; }
+            }
+            const arrow = headers[columnIndex].querySelector('.arrow');
+            if (arrow) arrow.className = 'arrow ' + dir;
+        }
+    });
+
     const markPaidUrlTemplate = "{% url 'mark_invoice_paid' 0 %}";  // .../0/mark-paid/ -> swap the 0 for the real pk
+    const markPaidModalEl = document.getElementById('markPaidModal');
+    const markPaidModal = new bootstrap.Modal(markPaidModalEl);
+    let pendingInvoiceId = null;
+
     document.querySelectorAll('.mark-paid-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            if (!confirm('Mark this invoice as paid?')) return;
-            const invoiceId = this.dataset.invoiceId;
-            const url = markPaidUrlTemplate.replace('/0/mark-paid/', `/${invoiceId}/mark-paid/`);
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert(data.error || 'Could not mark invoice as paid.');
-                }
-            })
-            .catch(error => console.error('Error:', error));
+            pendingInvoiceId = this.dataset.invoiceId;
+            document.getElementById('markPaidMethod').value = '';
+            markPaidModal.show();
         });
+    });
+
+    document.getElementById('confirmMarkPaidBtn').addEventListener('click', function() {
+        if (!pendingInvoiceId) return;
+        const method = document.getElementById('markPaidMethod').value;
+        const url = markPaidUrlTemplate.replace('/0/mark-paid/', `/${pendingInvoiceId}/mark-paid/`);
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
+            },
+            body: new URLSearchParams({ method: method })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.error || 'Could not mark invoice as paid.');
+            }
+        })
+        .catch(error => console.error('Error:', error));
     });
 </script>
 {% endblock %}

@@ -17,15 +17,15 @@
                             <div class="bg-light p-3 rounded">
                                 <h6 class="fw-bold text-primary border-bottom pb-2"><i class="bi bi-credit-card"></i> Card Details</h6>
                                 <div class="mb-2">
-                                    <label for="modal_customer" class="form-label fw-semibold">Customer *</label>
+                                    <label for="modal_customer" class="form-label fw-semibold">Cardholder *</label>
                                     <div class="input-group">
                                         <select name="customer" id="modal_customer" class="form-select" required>
-                                            <option value="">-- Select Customer --</option>
+                                            <option value="">-- Select Cardholder --</option>
                                             {% for customer in customers %}
                                                 <option value="{{ customer.pk }}">{{ customer.name }}</option>
                                             {% endfor %}
                                         </select>
-                                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal" title="Add new customer">
+                                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal" title="Add new cardholder">
                                             <i class="bi bi-person-plus"></i>
                                         </button>
                                     </div>
@@ -41,7 +41,7 @@
                                     <div class="form-text text-muted small">Select a category to load its services.</div>
                                 </div>
                                 <div class="mb-2">
-                                    <label for="modal_showroom" class="form-label fw-semibold">Showroom</label>
+                                    <label for="modal_showroom" class="form-label fw-semibold">Sponsor</label>
                                     <div class="input-group">
                                         <select name="showroom" id="modal_showroom" class="form-select">
                                             <option value="">-- None (Individual card) --</option>
@@ -49,18 +49,18 @@
                                                 <option value="{{ showroom.pk }}">{{ showroom.name }}</option>
                                             {% endfor %}
                                         </select>
-                                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addShowroomModal" title="Add new showroom">
+                                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addShowroomModal" title="Add new sponsor">
                                             <i class="bi bi-plus-lg"></i>
                                         </button>
                                     </div>
-                                    <div class="form-text text-muted small">Leave as "Individual" unless this card is a gift from a showroom.</div>
+                                    <div class="form-text text-muted small">Leave as "Individual" unless this card is a gift from a sponsor.</div>
                                 </div>
                                 <div class="mb-2">
                                     <label for="modal_vehicle_number" class="form-label fw-semibold">Vehicle Number</label>
                                     <input type="text" name="vehicle_number" id="modal_vehicle_number" class="form-control">
                                 </div>
                                 <div class="mb-2">
-                                    <label for="modal_chassis_number" class="form-label fw-semibold">Chassis Number</label>
+                                    <label for="modal_chassis_number" class="form-label fw-semibold">VIN Number</label>
                                     <input type="text" name="chassis_number" id="modal_chassis_number" class="form-control"
                                            placeholder="17-character VIN" maxlength="17" minlength="17"
                                            pattern="[0-9A-HJ-NPR-Z]{17}"

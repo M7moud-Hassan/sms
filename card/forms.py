@@ -17,13 +17,21 @@ def validate_vin(value):
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
-        fields = ['name', 'phone', 'email', 'address']
+        fields = ['name', 'phone', 'email', 'address', 'logo', 'payment', 'notes']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Full name'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '+1234567890'}),
             'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'email@example.com'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'logo': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'payment': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['logo'].required = False
+        self.fields['notes'].required = False
 
 class CardForm(forms.ModelForm):
     class Meta:
@@ -66,7 +74,7 @@ class ShowroomForm(forms.ModelForm):
         model = Showroom
         fields = ['name']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Showroom name'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Sponsor name'}),
         }
 ServiceQuotaFormSet = inlineformset_factory(
     Card,

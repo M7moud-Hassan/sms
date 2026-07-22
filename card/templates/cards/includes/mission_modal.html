@@ -13,7 +13,7 @@
                 <div class="modal-body">
                     <!-- Customer (read‑only) -->
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Customer</label>
+                        <label class="form-label fw-bold">Cardholder</label>
                         <input type="text" class="form-control" value="{{ request.card.customer.name }}" readonly>
                     </div>
                     <div class="mb-3">
@@ -76,7 +76,7 @@
                                value="{{ request.mission.cost|default:'0' }}" required>
                         <div class="form-text">
                             <i class="bi bi-info-circle"></i>
-                            A cost greater than 0 automatically generates a customer invoice for this request.
+                            A cost greater than 0 automatically generates a cardholder invoice for this request.
                         </div>
                     </div>
                     <!-- Cost reason -->

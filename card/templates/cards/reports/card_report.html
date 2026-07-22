@@ -11,7 +11,7 @@
 <form method="get" class="row g-3 bg-light p-3 rounded mb-4">
     <div class="col-md-4">
         <label class="form-label">Search</label>
-        <input type="text" name="q" class="form-control" placeholder="Customer, vehicle, chassis, car type..." value="{{ request.GET.q }}">
+        <input type="text" name="q" class="form-control" placeholder="Cardholder, vehicle, chassis, car type..." value="{{ request.GET.q }}">
     </div>
     <div class="col-md-2">
         <label class="form-label">From Date</label>
@@ -31,10 +31,10 @@
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label">Showroom</label>
+        <label class="form-label">Sponsor</label>
         <select name="showroom" class="form-select">
             <option value="">All</option>
-            <option value="individual" {% if request.GET.showroom == "individual" %}selected{% endif %}>Individual (no showroom)</option>
+            <option value="individual" {% if request.GET.showroom == "individual" %}selected{% endif %}>Individual (no sponsor)</option>
             {% for showroom in showrooms %}
             <option value="{{ showroom.pk }}" {% if request.GET.showroom == showroom.pk|stringformat:"s" %}selected{% endif %}>{{ showroom.name }}</option>
             {% endfor %}
@@ -52,13 +52,13 @@
         <thead class="table-dark">
             <tr>
                 <th>Card Number</th>
-                <th>Customer</th>
+                <th>Cardholder</th>
                 <th>Vehicle</th>
                 <th>Chassis</th>
                 <th>Car Type</th>
                 <th>Car Color</th>
                 <th>Category</th>
-                <th>Showroom</th>
+                <th>Sponsor</th>
                 <th>Price</th>
                 <th>Issue Date</th>
                 <th>Expiry Date</th>

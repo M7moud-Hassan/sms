@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+{% block title %}{{ customer.name }} - Balance{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        {% if customer.logo %}
+            <img src="{{ customer.logo.url }}" width="36" height="36" class="rounded-circle me-2" style="object-fit: cover;" alt="">
+        {% else %}
+            <i class="bi bi-person-circle"></i>
+        {% endif %}
+        {{ customer.name }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{% url 'customer_list' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+        <a id="exportBtn" href="{% url 'cardholder_statement_export' customer.pk %}" class="btn btn-outline-primary">
+            <i class="bi bi-file-earmark-arrow-down"></i> Export
+        </a>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="row">
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-info border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-info text-uppercase fw-bold mb-1">Total Charges</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">${{ total_charges|floatformat:2 }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-receipt fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-warning text-uppercase fw-bold mb-1">Total Paid</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">${{ total_paid|floatformat:2 }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-wallet2 fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-danger text-uppercase fw-bold mb-1">Outstanding Balance</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">${{ outstanding_balance|floatformat:2 }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-exclamation-triangle fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Date Filter -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="start" class="form-label fw-bold">From</label>
+                <input type="date" name="start" id="start" class="form-control" value="{{ request.GET.start }}">
+            </div>
+            <div class="col-md-3">
+                <label for="end" class="form-label fw-bold">To</label>
+                <input type="date" name="end" id="end" class="form-control" value="{{ request.GET.end }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Apply</button>
+                <a href="{% url 'cardholder_balance' customer.pk %}" class="btn btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Cards -->
+    <div class="col-lg-6 mb-4">
+        <h5><i class="bi bi-credit-card-2-front"></i> Cards</h5>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle bg-white">
+                <thead class="table-light">
+                    <tr>
+                        <th>Card #</th>
+                        <th>Category</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Issued</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for card in cards %}
+                    <tr>
+                        <td><a href="{% url 'card_detail' card.pk %}">{{ card.number_card }}</a></td>
+                        <td>{{ card.category.name|default:"—" }}</td>
+                        <td>{% if card.category %}${{ card.category.price|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td>
+                            {% if card.is_paid %}
+                                <span class="badge bg-success">Paid</span>
+                            {% else %}
+                                <span class="badge bg-danger">Unpaid</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ card.created_at|date:"Y-m-d" }}</td>
+                        <td>
+                            <button type="button"
+                                    class="btn btn-sm {% if card.is_paid %}btn-outline-secondary{% else %}btn-outline-success{% endif %} toggle-card-paid-btn"
+                                    data-card-id="{{ card.pk }}">
+                                {% if card.is_paid %}<i class="bi bi-arrow-counterclockwise"></i>{% else %}<i class="bi bi-check-circle"></i>{% endif %}
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-3 text-muted">No cards in this range.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Service Invoices -->
+    <div class="col-lg-6 mb-4">
+        <h5><i class="bi bi-receipt"></i> Service Invoices</h5>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle bg-white">
+                <thead class="table-light">
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Service</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                    <tr>
+                        <td>{{ invoice.invoice_number }}</td>
+                        <td>{{ invoice.service_request.service.name }}</td>
+                        <td>${{ invoice.amount|floatformat:2 }}</td>
+                        <td>
+                            <span class="badge bg-{% if invoice.status == 'paid' %}success{% elif invoice.status == 'cancelled' %}secondary{% else %}danger{% endif %}">
+                                {{ invoice.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ invoice.created_at|date:"Y-m-d" }}</td>
+                        <td>
+                            {% if invoice.status == 'unpaid' %}
+                            <button type="button" class="btn btn-sm btn-outline-success mark-invoice-paid-btn" data-invoice-id="{{ invoice.pk }}">
+                                <i class="bi bi-check-circle"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-3 text-muted">No service invoices in this range.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const toggleCardPaidUrlTemplate = "{% url 'toggle_card_paid' 0 %}";
+    document.querySelectorAll('.toggle-card-paid-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('Toggle this card\'s paid status?')) return;
+            const url = toggleCardPaidUrlTemplate.replace('/0/toggle/', `/${this.dataset.cardId}/toggle/`);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
+                }
+            })
+            .then(response => response.json())
+            .then(data => { if (data.success) { location.reload(); } else { alert(data.error || 'Could not update.'); } })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+
+    const markInvoicePaidUrlTemplate = "{% url 'mark_invoice_paid' 0 %}";
+    document.querySelectorAll('.mark-invoice-paid-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('Mark this invoice as paid?')) return;
+            const url = markInvoicePaidUrlTemplate.replace('/0/mark-paid/', `/${this.dataset.invoiceId}/mark-paid/`);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
+                }
+            })
+            .then(response => response.json())
+            .then(data => { if (data.success) { location.reload(); } else { alert(data.error || 'Could not update.'); } })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+
+    // Keep the CSV export in sync with whatever date range is currently applied.
+    document.addEventListener('DOMContentLoaded', function() {
+        const startInput = document.getElementById('start');
+        const endInput = document.getElementById('end');
+        const exportBtn = document.getElementById('exportBtn');
+        const baseExportUrl = exportBtn.getAttribute('href');
+        function updateExportUrl() {
+            const params = new URLSearchParams();
+            if (startInput.value) params.set('start', startInput.value);
+            if (endInput.value) params.set('end', endInput.value);
+            const qs = params.toString();
+            exportBtn.setAttribute('href', qs ? `${baseExportUrl}?${qs}` : baseExportUrl);
+        }
+        startInput.addEventListener('input', updateExportUrl);
+        endInput.addEventListener('input', updateExportUrl);
+        updateExportUrl();
+    });
+</script>
+{% endblock %}

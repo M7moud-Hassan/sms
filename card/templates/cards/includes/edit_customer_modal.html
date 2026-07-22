@@ -3,10 +3,10 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="editCustomerModalLabel{{ customer.pk }}"><i class="bi bi-pencil-square"></i> Edit Customer</h5>
+                <h5 class="modal-title" id="editCustomerModalLabel{{ customer.pk }}"><i class="bi bi-pencil-square"></i> Edit Cardholder</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="post" action="{% url 'customer_edit' customer.pk %}" id="editCustomerForm{{ customer.pk }}">
+            <form method="post" action="{% url 'customer_edit' customer.pk %}" id="editCustomerForm{{ customer.pk }}" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="modal-body">
                     <div class="mb-3">
@@ -25,10 +25,28 @@
                         <label for="id_address_{{ customer.pk }}" class="form-label fw-bold">Address</label>
                         <textarea name="address" id="id_address_{{ customer.pk }}" class="form-control" rows="2">{{ customer.address|default:'' }}</textarea>
                     </div>
+                    <div class="mb-3">
+                        <label for="id_payment_{{ customer.pk }}" class="form-label fw-bold">Payment System</label>
+                        <select name="payment" id="id_payment_{{ customer.pk }}" class="form-select">
+                            <option value="cash" {% if customer.payment == 'cash' %}selected{% endif %}>Cash</option>
+                            <option value="credit" {% if customer.payment == 'credit' %}selected{% endif %}>Credit</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_logo_{{ customer.pk }}" class="form-label fw-bold">Logo</label>
+                        {% if customer.logo %}
+                        <div class="mb-2"><img src="{{ customer.logo.url }}" width="48" height="48" class="rounded-circle" style="object-fit: cover;" alt=""></div>
+                        {% endif %}
+                        <input type="file" name="logo" id="id_logo_{{ customer.pk }}" class="form-control" accept="image/*">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_notes_{{ customer.pk }}" class="form-label fw-bold">Notes</label>
+                        <textarea name="notes" id="id_notes_{{ customer.pk }}" class="form-control" rows="2">{{ customer.notes|default:'' }}</textarea>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning"><i class="bi bi-save"></i> Update Customer</button>
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-save"></i> Update Cardholder</button>
                 </div>
             </form>
         </div>

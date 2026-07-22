@@ -8,7 +8,7 @@
                 <h4 class="mb-0">Confirm Deletion</h4>
             </div>
             <div class="card-body">
-                <p>Are you sure you want to delete card <strong>{{ object.number_card }}</strong> for customer <strong>{{ object.customer.name }}</strong>?</p>
+                <p>Are you sure you want to delete card <strong>{{ object.number_card }}</strong> for cardholder <strong>{{ object.customer.name }}</strong>?</p>
                 <p class="text-danger"><i class="bi bi-exclamation-triangle"></i> This action cannot be undone.</p>
                 <form method="post">
                     {% csrf_token %}

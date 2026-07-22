@@ -4,6 +4,9 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2"><i class="bi bi-credit-card-2-front-fill"></i> Cards</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{% url 'card_payments' %}" class="btn btn-outline-success me-2">
+            <i class="bi bi-cash-coin"></i> Customers
+        </a>
         <a href="{% url 'category_service' %}" class="btn btn-outline-primary me-2">
             <i class="bi bi-tags"></i> Categories & Services
         </a>
@@ -20,7 +23,7 @@
             <div class="col-md-5">
                 <label for="search" class="form-label fw-bold">Search</label>
                 <input type="text" name="q" id="search" class="form-control"
-                       placeholder="Card #, customer, vehicle" value="{{ request.GET.q }}">
+                       placeholder="Card #, cardholder, vehicle" value="{{ request.GET.q }}">
             </div>
             <div class="col-md-3">
                 <label for="status" class="form-label fw-bold">Status</label>
@@ -44,7 +47,7 @@
         <thead class="table-dark">
             <tr>
                 <th>Card #</th>
-                <th>Customer</th>
+                <th>Cardholder</th>
                 <th>Vehicle</th>
                 <th>Issued</th>
                 <th>Expires</th>

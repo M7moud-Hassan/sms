@@ -1,12 +1,55 @@
 {% extends 'base.html' %}
-{% block title %}Customers{% endblock %}
+{% block title %}Cardholders{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2"><i class="bi bi-people-fill"></i> Customers</h1>
+    <h1 class="h2"><i class="bi bi-people-fill"></i> Cardholders</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
-            <i class="bi bi-person-plus"></i> Add Customer
+            <i class="bi bi-person-plus"></i> Add Cardholder
         </button>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="row">
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-primary border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-primary text-uppercase fw-bold mb-1">Total Cardholders</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_count }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-people fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-danger text-uppercase fw-bold mb-1">With Balance Due</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ due_count }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-exclamation-circle fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-warning border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-warning text-uppercase fw-bold mb-1">Total Balance Due</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">${{ total_due|floatformat:2 }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-cash-stack fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -14,12 +57,28 @@
 <div class="card shadow-sm mb-4">
     <div class="card-body">
         <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-8">
+            <div class="col-md-5">
                 <label for="customerSearch" class="form-label fw-bold">Search</label>
                 <input type="text" name="q" id="customerSearch" class="form-control"
-                       placeholder="Name, phone or email" value="{{ request.GET.q }}">
+                       placeholder="Name, phone, email or notes" value="{{ request.GET.q }}">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-2">
+                <label for="payment" class="form-label fw-bold">Payment</label>
+                <select name="payment" id="payment" class="form-select">
+                    <option value="">All</option>
+                    <option value="cash" {% if request.GET.payment == 'cash' %}selected{% endif %}>Cash</option>
+                    <option value="credit" {% if request.GET.payment == 'credit' %}selected{% endif %}>Credit</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="balance" class="form-label fw-bold">Balance</label>
+                <select name="balance" id="balance" class="form-select">
+                    <option value="">All</option>
+                    <option value="due" {% if request.GET.balance == 'due' %}selected{% endif %}>With Balance Due</option>
+                    <option value="settled" {% if request.GET.balance == 'settled' %}selected{% endif %}>Settled</option>
+                </select>
+            </div>
+            <div class="col-md-3">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Apply</button>
                 <a href="{% url 'customer_list' %}" class="btn btn-outline-secondary">Clear</a>
             </div>
@@ -32,21 +91,49 @@
     <table class="table table-hover align-middle">
         <thead class="table-dark">
             <tr>
+                <th>Logo</th>
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Email</th>
+                <th>Payment</th>
+                <th>Balance</th>
                 <th>Cards</th>
+                <th>Notes</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for customer in customers %}
             <tr>
+                <td>
+                    {% if customer.logo %}
+                        <img src="{{ customer.logo.url }}" width="36" height="36" class="rounded-circle" style="object-fit: cover;" alt="">
+                    {% else %}
+                        <i class="bi bi-person-circle fs-3 text-secondary"></i>
+                    {% endif %}
+                </td>
                 <td>{{ customer.name }}</td>
                 <td>{{ customer.phone|default:"—" }}</td>
                 <td>{{ customer.email|default:"—" }}</td>
-                <td><span class="badge bg-info">{{ customer.cards.count }}</span></td>
                 <td>
+                    {% if customer.payment == 'credit' %}
+                        <span class="badge bg-info text-dark">Credit</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Cash</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'cardholder_balance' customer.pk %}"
+                       class="fw-bold text-decoration-none {% if customer.computed_balance > 0 %}link-danger{% else %}link-success{% endif %}">
+                        ${{ customer.computed_balance|floatformat:2 }}
+                    </a>
+                </td>
+                <td><span class="badge bg-info">{{ customer.cards.count }}</span></td>
+                <td>{{ customer.notes|default:"—"|truncatechars:40 }}</td>
+                <td class="text-nowrap">
+                    <a href="{% url 'cardholder_balance' customer.pk %}" class="btn btn-sm btn-outline-primary" title="Balance">
+                        <i class="bi bi-cash-coin"></i>
+                    </a>
                     <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editCustomerModal{{ customer.pk }}">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -59,7 +146,7 @@
             {% include 'cards/includes/delete_customer_modal.html' with customer=customer %}
             {% empty %}
             <tr>
-                <td colspan="5" class="text-center py-4 text-muted">No customers found.</td>
+                <td colspan="9" class="text-center py-4 text-muted">No cardholders found.</td>
             </tr>
             {% endfor %}
         </tbody>

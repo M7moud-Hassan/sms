@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Delete Customer{% endblock %}
+{% block title %}Delete Cardholder{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
@@ -8,8 +8,8 @@
                 <h4 class="mb-0">Confirm Deletion</h4>
             </div>
             <div class="card-body">
-                <p>Are you sure you want to delete customer <strong>{{ object.name }}</strong>?</p>
-                <p class="text-danger"><i class="bi bi-exclamation-triangle"></i> This action cannot be undone. All cards linked to this customer will also be deleted.</p>
+                <p>Are you sure you want to delete cardholder <strong>{{ object.name }}</strong>?</p>
+                <p class="text-danger"><i class="bi bi-exclamation-triangle"></i> This action cannot be undone. All cards linked to this cardholder will also be deleted.</p>
                 <form method="post">
                     {% csrf_token %}
                     <div class="d-flex gap-2">

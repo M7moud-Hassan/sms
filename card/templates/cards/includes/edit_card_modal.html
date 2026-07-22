@@ -11,7 +11,7 @@
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="id_customer_{{ card.pk }}" class="form-label fw-bold">Customer *</label>
+                            <label for="id_customer_{{ card.pk }}" class="form-label fw-bold">Cardholder *</label>
                             <select name="customer" id="id_customer_{{ card.pk }}" class="form-select" required>
                                 {% for customer in customers %}
                                 <option value="{{ customer.pk }}" {% if card.customer.pk == customer.pk %}selected{% endif %}>{{ customer.name }}</option>
@@ -30,7 +30,7 @@
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="id_showroom_{{ card.pk }}" class="form-label fw-bold">Showroom</label>
+                            <label for="id_showroom_{{ card.pk }}" class="form-label fw-bold">Sponsor</label>
                             <div class="input-group">
                                 <select name="showroom" id="id_showroom_{{ card.pk }}" class="form-select">
                                     <option value="">-- None (Individual card) --</option>
@@ -38,7 +38,7 @@
                                     <option value="{{ showroom.pk }}" {% if card.showroom and card.showroom.pk == showroom.pk %}selected{% endif %}>{{ showroom.name }}</option>
                                     {% endfor %}
                                 </select>
-                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addShowroomModal" title="Add new showroom">
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addShowroomModal" title="Add new sponsor">
                                     <i class="bi bi-plus-lg"></i>
                                 </button>
                             </div>
@@ -50,7 +50,7 @@
                             <input type="text" name="vehicle_number" id="id_vehicle_number_{{ card.pk }}" class="form-control" value="{{ card.vehicle_number|default:'' }}">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="id_chassis_number_{{ card.pk }}" class="form-label fw-bold">Chassis Number</label>
+                            <label for="id_chassis_number_{{ card.pk }}" class="form-label fw-bold">VIN Number</label>
                             <input type="text" name="chassis_number" id="id_chassis_number_{{ card.pk }}" class="form-control" value="{{ card.chassis_number|default:'' }}">
                         </div>
                     </div>

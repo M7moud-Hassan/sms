@@ -3,20 +3,20 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="addShowroomModalLabel"><i class="bi bi-shop"></i> New Showroom</h5>
+                <h5 class="modal-title" id="addShowroomModalLabel"><i class="bi bi-shop"></i> New Sponsor</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="post" action="{% url 'showroom_add' %}" id="addShowroomForm">
                 {% csrf_token %}
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="id_showroom_name" class="form-label fw-bold">Showroom Name *</label>
+                        <label for="id_showroom_name" class="form-label fw-bold">Sponsor Name *</label>
                         <input type="text" name="name" id="id_showroom_name" class="form-control" required>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Showroom</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Sponsor</button>
                 </div>
             </form>
         </div>

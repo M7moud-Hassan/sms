@@ -130,7 +130,7 @@
         <div class="info-grid">
             <div>
                 <div class="section-title">Bill To</div>
-                <div class="info-row"><span class="label">Customer:</span> {{ invoice.service_request.card.customer.name }}</div>
+                <div class="info-row"><span class="label">Cardholder:</span> {{ invoice.service_request.card.customer.name }}</div>
                 <div class="info-row"><span class="label">Card #:</span> {{ invoice.service_request.card.number_card }}</div>
                 <div class="info-row"><span class="label">Vehicle:</span> {{ invoice.service_request.card.vehicle_number|default:"—" }}</div>
             </div>

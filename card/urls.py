@@ -12,6 +12,8 @@ urlpatterns = [
     path('customers/add/', views.CustomerCreateView.as_view(), name='customer_add'),
     path('customers/<int:pk>/edit/', views.CustomerUpdateView.as_view(), name='customer_edit'),
     path('customers/<int:pk>/delete/', views.CustomerDeleteView.as_view(), name='customer_delete'),
+    path('customers/<int:pk>/balance/', views.CustomerBalanceView.as_view(), name='cardholder_balance'),
+    path('customers/<int:pk>/statement/export/', views.export_cardholder_statement, name='cardholder_statement_export'),
 
     # Showrooms
     path('showrooms/add/', views.ShowroomCreateView.as_view(), name='showroom_add'),
@@ -23,6 +25,10 @@ urlpatterns = [
     path('cards/<int:pk>/edit/', views.CardUpdateView.as_view(), name='card_edit'),
     path('cards/<int:pk>/delete/', views.CardDeleteView.as_view(), name='card_delete'),
     path('cards/<int:pk>/print/', views.print_card, name='card_print'),
+
+    # Card Payments (whether the card price itself has been paid)
+    path('payments/', views.CardPaymentListView.as_view(), name='card_payments'),
+    path('payments/<int:pk>/toggle/', views.toggle_card_paid, name='toggle_card_paid'),
 
     # Categories & Services (combined page)
     path('categories-services/', views.CategoryServiceView.as_view(), name='category_service'),
@@ -61,6 +67,7 @@ path('card/<int:pk>/requests/', views.card_requests, name='card_requests'),
 
     # Invoices (overage / metered usage billing)
     path('invoices/', views.ServiceInvoiceListView.as_view(), name='invoice_list'),
+    path('invoices/export/', views.export_invoices_csv, name='export_invoices_csv'),
     path('invoices/<int:pk>/print/', views.invoice_print, name='invoice_print'),
     path('invoices/<int:pk>/mark-paid/', views.mark_invoice_paid, name='mark_invoice_paid'),
 

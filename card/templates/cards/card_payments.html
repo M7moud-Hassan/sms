@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+{% block title %}Card Payments{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-cash-coin"></i> Card Payments</h1>
+    <a href="{% url 'card_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-credit-card-2-front"></i> Back to Cards
+    </a>
+</div>
+
+<!-- Stats Cards Row 1: counts -->
+<div class="row">
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-primary border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-primary text-uppercase fw-bold mb-1">Total Cards</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_count }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-credit-card-2-front fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-success border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-success text-uppercase fw-bold mb-1">Paid</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ paid_count }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-check-circle fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-danger text-uppercase fw-bold mb-1">Unpaid</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ unpaid_count }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-exclamation-circle fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards Row 2: money -->
+<div class="row">
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-secondary border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-secondary text-uppercase fw-bold mb-1">Total Value</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">${{ total_value|floatformat:2 }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-cash-stack fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-success border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-success text-uppercase fw-bold mb-1">Collected</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">${{ paid_value|floatformat:2 }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-wallet2 fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card border-start border-danger border-4 shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs text-danger text-uppercase fw-bold mb-1">Outstanding</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">${{ unpaid_value|floatformat:2 }}</div>
+                    </div>
+                    <div class="col-auto"><i class="bi bi-exclamation-triangle fs-2 text-gray-300"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Card -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="search" class="form-label fw-bold">Search</label>
+                <input type="text" name="q" id="search" class="form-control"
+                       placeholder="Card #, cardholder, sponsor" value="{{ request.GET.q }}">
+            </div>
+            <div class="col-md-2">
+                <label for="pay_by" class="form-label fw-bold">Pay By</label>
+                <select name="pay_by" id="pay_by" class="form-select">
+                    <option value="">All</option>
+                    <option value="showroom" {% if request.GET.pay_by == 'showroom' %}selected{% endif %}>Sponsor</option>
+                    <option value="customer" {% if request.GET.pay_by == 'customer' %}selected{% endif %}>Cardholder</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="showroom" class="form-label fw-bold">Sponsor</label>
+                <select name="showroom" id="showroom" class="form-select">
+                    <option value="">All Sponsors</option>
+                    {% for showroom in showrooms %}
+                    <option value="{{ showroom.pk }}" {% if request.GET.showroom == showroom.pk|stringformat:"s" %}selected{% endif %}>{{ showroom.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="status" class="form-label fw-bold">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All</option>
+                    <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Paid</option>
+                    <option value="unpaid" {% if request.GET.status == 'unpaid' %}selected{% endif %}>Unpaid</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-flex gap-1">
+                <button type="submit" class="btn btn-primary" title="Apply"><i class="bi bi-funnel"></i></button>
+                <a href="{% url 'card_payments' %}" class="btn btn-outline-secondary" title="Clear"><i class="bi bi-x-lg"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card Payments Table -->
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Card #</th>
+                <th>Cardholder</th>
+                <th>Pay By</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for card in cards %}
+            <tr>
+                <td><a href="{% url 'card_detail' card.pk %}">{{ card.number_card }}</a></td>
+                <td>{{ card.customer.name }}</td>
+                <td>
+                    {% if card.showroom %}
+                        <span class="badge bg-info text-dark"><i class="bi bi-building"></i> {{ card.showroom.name }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary"><i class="bi bi-person"></i> Cardholder</span>
+                    {% endif %}
+                </td>
+                <td>{{ card.category.name|default:"—" }}</td>
+                <td class="fw-bold">{% if card.category %}${{ card.category.price|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td>
+                    {% if card.is_paid %}
+                        <span class="badge bg-success">Paid</span>
+                        {% if card.paid_at %}<div class="small text-muted">{{ card.paid_at|date:"Y-m-d H:i" }}</div>{% endif %}
+                    {% else %}
+                        <span class="badge bg-danger">Unpaid</span>
+                    {% endif %}
+                </td>
+                <td class="text-nowrap">
+                    <button type="button"
+                            class="btn btn-sm {% if card.is_paid %}btn-outline-secondary{% else %}btn-outline-success{% endif %} toggle-paid-btn"
+                            data-card-id="{{ card.pk }}">
+                        {% if card.is_paid %}
+                            <i class="bi bi-arrow-counterclockwise"></i> Mark Unpaid
+                        {% else %}
+                            <i class="bi bi-check-circle"></i> Mark Paid
+                        {% endif %}
+                    </button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">No cards found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<script>
+    const togglePaidUrlTemplate = "{% url 'toggle_card_paid' 0 %}";  // .../0/toggle/ -> swap the 0 for the real pk
+    document.querySelectorAll('.toggle-paid-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const willBeUnpaid = this.textContent.includes('Mark Unpaid');
+            const confirmMsg = willBeUnpaid ? 'Mark this card as unpaid?' : 'Mark this card as paid?';
+            if (!confirm(confirmMsg)) return;
+            const cardId = this.dataset.cardId;
+            const url = togglePaidUrlTemplate.replace('/0/toggle/', `/${cardId}/toggle/`);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Could not update payment status.');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+</script>
+{% endblock %}

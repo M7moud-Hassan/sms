@@ -3,10 +3,10 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="addCustomerModalLabel"><i class="bi bi-person-plus"></i> New Customer</h5>
+                <h5 class="modal-title" id="addCustomerModalLabel"><i class="bi bi-person-plus"></i> New Cardholder</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="post" action="{% url 'customer_add' %}" id="addCustomerForm">
+            <form method="post" action="{% url 'customer_add' %}" id="addCustomerForm" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="modal-body">
                     <div class="mb-3">
@@ -25,10 +25,25 @@
                         <label for="id_address" class="form-label fw-bold">Address</label>
                         <textarea name="address" id="id_address" class="form-control" rows="2"></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label for="id_payment" class="form-label fw-bold">Payment System</label>
+                        <select name="payment" id="id_payment" class="form-select">
+                            <option value="cash" selected>Cash</option>
+                            <option value="credit">Credit</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_logo" class="form-label fw-bold">Logo</label>
+                        <input type="file" name="logo" id="id_logo" class="form-control" accept="image/*">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_notes" class="form-label fw-bold">Notes</label>
+                        <textarea name="notes" id="id_notes" class="form-control" rows="2"></textarea>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Customer</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Cardholder</button>
                 </div>
             </form>
         </div>

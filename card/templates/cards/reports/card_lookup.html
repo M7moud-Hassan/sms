@@ -13,9 +13,9 @@
         <label class="form-label">Search By</label>
         <select name="by" class="form-select">
             <option value="number" {% if request.GET.by == 'number' %}selected{% endif %}>Card Number</option>
-            <option value="chassis" {% if request.GET.by == 'chassis' %}selected{% endif %}>Chassis Number</option>
+            <option value="chassis" {% if request.GET.by == 'chassis' %}selected{% endif %}>VIN Number</option>
             <option value="vehicle" {% if request.GET.by == 'vehicle' %}selected{% endif %}>Vehicle Number</option>
-            <option value="customer" {% if request.GET.by == 'customer' %}selected{% endif %}>Customer Name</option>
+            <option value="customer" {% if request.GET.by == 'customer' %}selected{% endif %}>Cardholder Name</option>
         </select>
     </div>
     <div class="col-md-6">
@@ -36,7 +36,7 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Card Number</th>
-                        <th>Customer</th>
+                        <th>Cardholder</th>
                         <th>Category</th>
                         <th>Vehicle</th>
                         <th>Chassis</th>

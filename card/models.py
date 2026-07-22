@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Sum
 from django.conf import settings
 from django.urls import reverse
 from phonenumber_field.modelfields import PhoneNumberField
@@ -50,13 +51,41 @@ class Service(models.Model):
         return self.name
 
 class Customer(models.Model):
+    PAYMENT_CASH = 'cash'
+    PAYMENT_CREDIT = 'credit'
+    PAYMENT_CHOICES = [
+        (PAYMENT_CASH, 'Cash'),
+        (PAYMENT_CREDIT, 'Credit'),
+    ]
+
     name = models.CharField(max_length=100)
     phone = PhoneNumberField(unique=True, null=True, blank=True,region='JO')
     email = models.EmailField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)
+    logo = models.ImageField(upload_to='cardholders/logos/', blank=True, null=True)
+    payment = models.CharField(max_length=10, choices=PAYMENT_CHOICES, default=PAYMENT_CASH)
+    notes = models.CharField(max_length=500, blank=True, null=True)
 
     def __str__(self):
         return self.name
+
+    @property
+    def unpaid_cards_total(self):
+        """Sum of category prices for this cardholder's not-yet-paid cards (Python-side sum,
+        so callers that already prefetched `cards__category` don't trigger extra queries)."""
+        return sum((c.category.price if c.category else 0) for c in self.cards.all() if not c.is_paid)
+
+    @property
+    def unpaid_invoices_total(self):
+        return ServiceInvoice.objects.filter(
+            service_request__card__customer=self, status='unpaid'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+    @property
+    def balance(self):
+        """Auto-calculated outstanding balance: unpaid card prices + unpaid service-overage
+        invoices. Not a stored field, so it can't drift from what's actually marked paid."""
+        return self.unpaid_cards_total + self.unpaid_invoices_total
 
 class Card(models.Model):
     # Public identifier used in the QR scan link, so card IDs can't be guessed/enumerated (e.g. /scan/1/, /scan/2/...).
@@ -73,6 +102,8 @@ class Card(models.Model):
     category = models.ForeignKey(CategoryCard, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards')
     showroom = models.ForeignKey(Showroom, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards', help_text="Leave blank for an individual card")
     is_active = models.BooleanField(default=True)
+    is_paid = models.BooleanField(default=False, help_text="Whether the card price has been paid")
+    paid_at = models.DateTimeField(null=True, blank=True)
 
     def generate_card_number(self):
         year = timezone.now().year
@@ -185,11 +216,18 @@ class ServiceInvoice(models.Model):
         ('paid', 'Paid'),
         ('cancelled', 'Cancelled'),
     ]
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('cliq', 'CliQ'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('card', 'Card'),
+    ]
     invoice_number = models.CharField(max_length=20, unique=True, blank=True)
     service_request = models.OneToOneField(ServiceRequest, on_delete=models.CASCADE, related_name='invoice')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     reason = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='unpaid')
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
 
