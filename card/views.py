@@ -75,10 +75,13 @@ class DashboardView(LoginRequiredMixin, ListView):
         # عدد الإشعارات (الطلبات بدون مهمة)
         context['notification_count'] = ServiceRequest.objects.filter(mission__isnull=True).count()
 
-        # فواتير غير مدفوعة
-        unpaid_invoices = ServiceInvoice.objects.filter(status='unpaid')
-        context['unpaid_invoices_count'] = unpaid_invoices.count()
-        context['unpaid_invoices_total'] = unpaid_invoices.aggregate(total=Sum('amount'))['total'] or 0
+        # فواتير غير مدفوعة (بطاقات صادرة + فواتير خدمات)
+        unpaid_service = ServiceInvoice.objects.filter(status='unpaid')
+        unpaid_service_total = unpaid_service.aggregate(total=Sum('amount'))['total'] or 0
+        unpaid_cards = Card.objects.filter(is_paid=False, category__isnull=False).select_related('category')
+        unpaid_cards_total = sum(c.category.price for c in unpaid_cards)
+        context['unpaid_invoices_count'] = unpaid_service.count() + unpaid_cards.count()
+        context['unpaid_invoices_total'] = unpaid_service_total + unpaid_cards_total
 
         context['active_tab'] ='cards'
         # بيانات للتقارير (يمكن تمريرها إذا لزم)
@@ -164,8 +167,11 @@ class CustomerBalanceView(LoginRequiredMixin, DetailView):
         if end_date:
             invoices = invoices.filter(created_at__date__lte=end_date)
 
-        card_total = sum((c.category.price if c.category else 0) for c in cards)
-        card_paid = sum((c.category.price if c.category else 0) for c in cards if c.is_paid)
+        # Showroom-gifted cards are that showroom's bill, not the cardholder's - excluded
+        # from these totals so they reconcile with customer.balance (self-pay cards only).
+        self_pay_cards = [c for c in cards if c.showroom_id is None]
+        card_total = sum((c.category.price if c.category else 0) for c in self_pay_cards)
+        card_paid = sum((c.category.price if c.category else 0) for c in self_pay_cards if c.is_paid)
         invoices_total = invoices.aggregate(total=Sum('amount'))['total'] or 0
         invoices_paid = invoices.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
 
@@ -201,7 +207,7 @@ def export_cardholder_statement(request, pk):
     if end_date:
         invoices = invoices.filter(created_at__date__lte=end_date)
 
-    response = HttpResponse(content_type='text/csv')
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
     response['Content-Disposition'] = f'attachment; filename="{customer.name}_statement.csv"'
     writer = csv.writer(response)
     writer.writerow(['Type', 'Reference', 'Description', 'Amount', 'Status', 'Date'])
@@ -279,6 +285,104 @@ class ShowroomCreateView(LoginRequiredMixin, CreateView):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': True})
         return JsonResponse({'success': True})   # fallback
+
+
+class ShowroomListView(LoginRequiredMixin, ListView):
+    """Sponsors directory with each one's outstanding balance for the cards they've
+    gifted - the counterpart to the Cardholders list."""
+    model = Showroom
+    template_name = 'cards/showroom_list.html'
+    context_object_name = 'showrooms'
+    paginate_by = 20
+
+    def get_base_queryset(self):
+        queryset = Showroom.objects.prefetch_related('cards__category')
+        q = self.request.GET.get('q', '')
+        if q:
+            queryset = queryset.filter(Q(name__icontains=q))
+        return queryset
+
+    def get_queryset(self):
+        showrooms = list(self.get_base_queryset())
+        for s in showrooms:
+            s.computed_balance = s.balance
+        balance_filter = self.request.GET.get('balance')
+        if balance_filter == 'due':
+            showrooms = [s for s in showrooms if s.computed_balance > 0]
+        elif balance_filter == 'settled':
+            showrooms = [s for s in showrooms if s.computed_balance <= 0]
+        showrooms.sort(key=lambda s: s.computed_balance, reverse=True)
+        return showrooms
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['query_params'] = self.request.GET.copy()
+        if 'page' in context['query_params']:
+            del context['query_params']['page']
+        context['active_tab'] = 'cards'
+
+        all_showrooms = self.get_base_queryset()
+        context['total_count'] = all_showrooms.count()
+        balances = [s.balance for s in all_showrooms]
+        context['due_count'] = sum(1 for b in balances if b > 0)
+        context['total_due'] = sum(b for b in balances if b > 0)
+        return context
+
+
+class ShowroomBalanceView(LoginRequiredMixin, DetailView):
+    """Sponsor statement: outstanding balance for the cards this showroom has gifted,
+    with a date range filter and CSV export - the counterpart to CustomerBalanceView."""
+    model = Showroom
+    template_name = 'cards/showroom_balance.html'
+    context_object_name = 'showroom'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        showroom = self.object
+        start_date = self.request.GET.get('start')
+        end_date = self.request.GET.get('end')
+
+        cards = showroom.cards.select_related('category', 'customer').order_by('-created_at')
+        if start_date:
+            cards = cards.filter(created_at__date__gte=start_date)
+        if end_date:
+            cards = cards.filter(created_at__date__lte=end_date)
+
+        card_total = sum((c.category.price if c.category else 0) for c in cards)
+        card_paid = sum((c.category.price if c.category else 0) for c in cards if c.is_paid)
+
+        context['cards'] = cards
+        context['total_charges'] = card_total
+        context['total_paid'] = card_paid
+        context['outstanding_balance'] = showroom.balance
+        context['active_tab'] = 'cards'
+        return context
+
+
+@login_required
+def export_showroom_statement(request, pk):
+    showroom = get_object_or_404(Showroom, pk=pk)
+    start_date = request.GET.get('start')
+    end_date = request.GET.get('end')
+
+    cards = showroom.cards.select_related('category', 'customer').order_by('created_at')
+    if start_date:
+        cards = cards.filter(created_at__date__gte=start_date)
+    if end_date:
+        cards = cards.filter(created_at__date__lte=end_date)
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = f'attachment; filename="{showroom.name}_statement.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Card #', 'Cardholder', 'Category', 'Amount', 'Status', 'Date'])
+    for c in cards:
+        writer.writerow([
+            c.number_card, c.customer.name, c.category.name if c.category else '',
+            c.category.price if c.category else 0, 'Paid' if c.is_paid else 'Unpaid',
+            c.created_at.strftime('%Y-%m-%d'),
+        ])
+    return response
+
 
 # ──────────────────────────────────────────────
 # CARD CRUD (AJAX MODALS)
@@ -1199,6 +1303,130 @@ def _default_invoice_date_params(get_params):
     return params
 
 
+from dataclasses import dataclass
+from typing import Optional
+from django.core.paginator import Paginator
+
+
+@dataclass
+class InvoiceRow:
+    """Normalizes either a Card (issuance charge, raised on the web when a card is
+    issued) or a ServiceInvoice (service overage charge, raised from the mobile app
+    when a driver logs mission cost) into one common shape for the combined Invoices
+    page. Built in Python after both are fetched/filtered - not a DB-backed model."""
+    source: str  # 'card' or 'service'
+    pk: int
+    reference: str
+    date: object
+    cardholder: str
+    billed_to: str
+    vehicle_number: str
+    driver_name: str
+    description: str
+    notes: str
+    amount: object
+    is_paid: bool
+    status_label: str
+    status_css: str
+    payment_method_label: str
+    detail_url: str
+    print_url: Optional[str]
+
+
+def _card_issuance_rows(params):
+    cards = Card.objects.select_related('customer', 'category', 'showroom').filter(category__isnull=False)
+    q = params.get('q', '')
+    if q:
+        cards = cards.filter(
+            Q(number_card__icontains=q) |
+            Q(customer__name__icontains=q) |
+            Q(vehicle_number__icontains=q) |
+            Q(category__name__icontains=q) |
+            Q(showroom__name__icontains=q)
+        )
+    quick_filter = params.get('quick_filter', 'all')
+    if quick_filter == 'paid':
+        cards = cards.filter(is_paid=True)
+    elif quick_filter == 'unpaid':
+        cards = cards.filter(is_paid=False)
+    elif quick_filter != 'all':
+        # 'cancelled' and every payment-method value only apply to service invoices -
+        # cards have neither concept, so none of them match.
+        cards = cards.none()
+    start_date = params.get('start')
+    if start_date:
+        cards = cards.filter(created_at__date__gte=start_date)
+    end_date = params.get('end')
+    if end_date:
+        cards = cards.filter(created_at__date__lte=end_date)
+
+    rows = []
+    for card in cards:
+        rows.append(InvoiceRow(
+            source='card',
+            pk=card.pk,
+            reference=card.number_card,
+            date=card.created_at,
+            cardholder=card.customer.name,
+            billed_to=card.showroom.name if card.showroom else 'Cardholder',
+            vehicle_number=card.vehicle_number or '',
+            driver_name='',
+            description=f"Card Issuance — {card.category.name}",
+            notes='',
+            amount=card.category.price,
+            is_paid=card.is_paid,
+            status_label='Paid' if card.is_paid else 'Unpaid',
+            status_css='success' if card.is_paid else 'danger',
+            payment_method_label='—',
+            detail_url=reverse('card_detail', kwargs={'pk': card.pk}),
+            print_url=None,
+        ))
+    return rows
+
+
+def _service_invoice_rows(params):
+    invoices = ServiceInvoice.objects.select_related(
+        'service_request', 'service_request__card', 'service_request__card__customer', 'service_request__service'
+    ).prefetch_related('service_request__mission__driver')
+    invoices = _filter_service_invoices(invoices, params)
+
+    rows = []
+    for inv in invoices:
+        mission = getattr(inv.service_request, 'mission', None)
+        driver_name = mission.driver.name if mission and mission.driver else ''
+        rows.append(InvoiceRow(
+            source='service',
+            pk=inv.pk,
+            reference=inv.invoice_number,
+            date=inv.created_at,
+            cardholder=inv.service_request.card.customer.name,
+            billed_to='Cardholder',
+            vehicle_number=inv.service_request.card.vehicle_number or '',
+            driver_name=driver_name,
+            description=inv.service_request.service.name,
+            notes=inv.reason,
+            amount=inv.amount,
+            is_paid=(inv.status == 'paid'),
+            status_label=inv.get_status_display(),
+            status_css='success' if inv.status == 'paid' else ('secondary' if inv.status == 'cancelled' else 'danger'),
+            payment_method_label=inv.get_payment_method_display() if inv.payment_method else '—',
+            detail_url=reverse('request_status', kwargs={'pk': inv.service_request.pk}),
+            print_url=reverse('invoice_print', kwargs={'pk': inv.pk}),
+        ))
+    return rows
+
+
+def _combined_invoice_rows(params):
+    invoice_type = params.get('invoice_type', '')
+    rows = []
+    if invoice_type != 'service':
+        rows.extend(_card_issuance_rows(params))
+    if invoice_type != 'card':
+        rows.extend(_service_invoice_rows(params))
+    rows.sort(key=lambda r: r.date, reverse=True)
+    return rows
+
+
 def _filter_service_invoices(queryset, params):
     """Shared filtering for the invoice list page and its CSV export: free-text search,
     date range, and a single 'quick_filter' radio value that is either a status
@@ -1230,11 +1458,12 @@ def _filter_service_invoices(queryset, params):
     return queryset
 
 
-class ServiceInvoiceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    model = ServiceInvoice
+class InvoiceListView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """Combined Invoices page: card issuance charges (raised on the web when a card is
+    issued) and service overage charges (raised from the mobile app when a driver logs
+    mission cost) - the two sources of billable events in the Card app, unified into one
+    list (this used to only show ServiceInvoice rows)."""
     template_name = 'cards/invoice_list.html'
-    context_object_name = 'invoices'
-    paginate_by = 20
 
     def test_func(self):
         return self.request.user.is_staff
@@ -1244,17 +1473,27 @@ class ServiceInvoiceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             self._effective_params = _default_invoice_date_params(self.request.GET)
         return self._effective_params
 
-    def get_queryset(self):
-        queryset = super().get_queryset().select_related(
-            'service_request', 'service_request__card', 'service_request__card__customer', 'service_request__service'
-        ).prefetch_related('service_request__mission__driver')
-        return _filter_service_invoices(queryset, self.get_effective_params())
+    def get_all_rows(self):
+        if not hasattr(self, '_all_rows'):
+            self._all_rows = _combined_invoice_rows(self.get_effective_params())
+        return self._all_rows
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        all_rows = self.get_all_rows()
+
+        paginator = Paginator(all_rows, 20)
+        page_obj = paginator.get_page(self.request.GET.get('page'))
+        context['invoices'] = page_obj.object_list
+        context['page_obj'] = page_obj
+        context['paginator'] = paginator
+        context['is_paginated'] = page_obj.has_other_pages()
+
         context['status_choices'] = ServiceInvoice.STATUS_CHOICES
         context['payment_method_choices'] = ServiceInvoice.PAYMENT_METHOD_CHOICES
         context['quick_filter'] = self.request.GET.get('quick_filter', 'all')
+        context['invoice_type'] = self.request.GET.get('invoice_type', '')
+
         params = self.get_effective_params()
         context['effective_start'] = params.get('start', '')
         context['effective_end'] = params.get('end', '')
@@ -1262,11 +1501,11 @@ class ServiceInvoiceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         if 'page' in query_params:
             del query_params['page']
         context['query_params'] = query_params
+
         context['active_tab'] = 'cards'
-        all_invoices = self.get_queryset()
-        context['total_count'] = all_invoices.count()
-        context['total_amount'] = all_invoices.aggregate(total=Sum('amount'))['total'] or 0
-        context['unpaid_total'] = all_invoices.filter(status='unpaid').aggregate(total=Sum('amount'))['total'] or 0
+        context['total_count'] = len(all_rows)
+        context['total_amount'] = sum(r.amount for r in all_rows)
+        context['unpaid_total'] = sum(r.amount for r in all_rows if not r.is_paid)
         return context
 
 
@@ -1290,34 +1529,29 @@ def export_invoices_csv(request):
     if not request.user.is_staff:
         return JsonResponse({'success': False, 'error': 'Staff only.'}, status=403)
 
-    invoices = ServiceInvoice.objects.select_related(
-        'service_request', 'service_request__card', 'service_request__card__customer', 'service_request__service'
-    ).prefetch_related('service_request__mission__driver')
-    invoices = _filter_service_invoices(invoices, _default_invoice_date_params(request.GET))
+    rows = _combined_invoice_rows(_default_invoice_date_params(request.GET))
 
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="Service_Invoices.csv"'
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="Invoices.csv"'
     writer = csv.writer(response)
     writer.writerow([
-        'Invoice #', 'Date', 'Card #', 'Cardholder', 'Vehicle No.', 'Service',
-        'Request #', 'Driver', 'Notes', 'Amount', 'Status', 'Payment Method',
+        'Type', 'Reference', 'Date', 'Cardholder', 'Billed To', 'Vehicle No.',
+        'Driver', 'Description', 'Notes', 'Amount', 'Status', 'Payment Method',
     ])
-    for inv in invoices:
-        mission = getattr(inv.service_request, 'mission', None)
-        driver_name = mission.driver.name if mission and mission.driver else ''
+    for row in rows:
         writer.writerow([
-            inv.invoice_number,
-            inv.created_at.strftime('%Y-%m-%d %H:%M'),
-            inv.service_request.card.number_card,
-            inv.service_request.card.customer.name,
-            inv.service_request.card.vehicle_number or '',
-            inv.service_request.service.name,
-            inv.service_request.request_number,
-            driver_name,
-            inv.reason,
-            inv.amount,
-            inv.get_status_display(),
-            inv.get_payment_method_display() if inv.payment_method else '',
+            'Card Issuance' if row.source == 'card' else 'Service',
+            row.reference,
+            row.date.strftime('%Y-%m-%d %H:%M'),
+            row.cardholder,
+            row.billed_to,
+            row.vehicle_number,
+            row.driver_name,
+            row.description,
+            row.notes,
+            row.amount,
+            row.status_label,
+            '' if row.payment_method_label == '—' else row.payment_method_label,
         ])
     return response
 

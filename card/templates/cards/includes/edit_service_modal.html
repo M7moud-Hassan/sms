@@ -21,7 +21,7 @@
                         <label for="service_category_{{ service.pk }}" class="form-label fw-bold">Category *</label>
                         <select name="category" id="service_category_{{ service.pk }}" class="form-select" required>
                             {% for category in categories %}
-                            <option value="{{ category.pk }}" {% if service.category.pk == category.pk %}selected{% endif %}>{{ category.name }} (${{ category.price }})</option>
+                            <option value="{{ category.pk }}" {% if service.category.pk == category.pk %}selected{% endif %}>{{ category.name }} ({{ category.price }} JD)</option>
                             {% endfor %}
                         </select>
                     </div>

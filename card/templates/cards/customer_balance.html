@@ -28,7 +28,7 @@
                 <div class="row align-items-center">
                     <div class="col">
                         <div class="text-xs text-info text-uppercase fw-bold mb-1">Total Charges</div>
-                        <div class="h5 mb-0 fw-bold text-gray-800">${{ total_charges|floatformat:2 }}</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_charges|floatformat:2 }} JD</div>
                     </div>
                     <div class="col-auto"><i class="bi bi-receipt fs-2 text-gray-300"></i></div>
                 </div>
@@ -41,7 +41,7 @@
                 <div class="row align-items-center">
                     <div class="col">
                         <div class="text-xs text-warning text-uppercase fw-bold mb-1">Total Paid</div>
-                        <div class="h5 mb-0 fw-bold text-gray-800">${{ total_paid|floatformat:2 }}</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_paid|floatformat:2 }} JD</div>
                     </div>
                     <div class="col-auto"><i class="bi bi-wallet2 fs-2 text-gray-300"></i></div>
                 </div>
@@ -54,7 +54,7 @@
                 <div class="row align-items-center">
                     <div class="col">
                         <div class="text-xs text-danger text-uppercase fw-bold mb-1">Outstanding Balance</div>
-                        <div class="h5 mb-0 fw-bold text-gray-800">${{ outstanding_balance|floatformat:2 }}</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ outstanding_balance|floatformat:2 }} JD</div>
                     </div>
                     <div class="col-auto"><i class="bi bi-exclamation-triangle fs-2 text-gray-300"></i></div>
                 </div>
@@ -94,6 +94,7 @@
                         <th>Card #</th>
                         <th>Category</th>
                         <th>Price</th>
+                        <th>Billed To</th>
                         <th>Status</th>
                         <th>Issued</th>
                         <th></th>
@@ -104,7 +105,14 @@
                     <tr>
                         <td><a href="{% url 'card_detail' card.pk %}">{{ card.number_card }}</a></td>
                         <td>{{ card.category.name|default:"—" }}</td>
-                        <td>{% if card.category %}${{ card.category.price|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td>{% if card.category %}{{ card.category.price|floatformat:2 }} JD{% else %}—{% endif %}</td>
+                        <td>
+                            {% if card.showroom %}
+                                <a href="{% url 'showroom_balance' card.showroom.pk %}" class="badge bg-info text-dark text-decoration-none" title="Gifted by this sponsor - not counted in the cardholder's balance">{{ card.showroom.name }}</a>
+                            {% else %}
+                                <span class="badge bg-secondary">Cardholder</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if card.is_paid %}
                                 <span class="badge bg-success">Paid</span>
@@ -122,7 +130,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="6" class="text-center py-3 text-muted">No cards in this range.</td></tr>
+                    <tr><td colspan="7" class="text-center py-3 text-muted">No cards in this range.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -149,7 +157,7 @@
                     <tr>
                         <td>{{ invoice.invoice_number }}</td>
                         <td>{{ invoice.service_request.service.name }}</td>
-                        <td>${{ invoice.amount|floatformat:2 }}</td>
+                        <td>{{ invoice.amount|floatformat:2 }} JD</td>
                         <td>
                             <span class="badge bg-{% if invoice.status == 'paid' %}success{% elif invoice.status == 'cancelled' %}secondary{% else %}danger{% endif %}">
                                 {{ invoice.get_status_display }}

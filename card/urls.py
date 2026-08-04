@@ -15,8 +15,11 @@ urlpatterns = [
     path('customers/<int:pk>/balance/', views.CustomerBalanceView.as_view(), name='cardholder_balance'),
     path('customers/<int:pk>/statement/export/', views.export_cardholder_statement, name='cardholder_statement_export'),
 
-    # Showrooms
+    # Showrooms (sponsors)
+    path('showrooms/', views.ShowroomListView.as_view(), name='showroom_list'),
     path('showrooms/add/', views.ShowroomCreateView.as_view(), name='showroom_add'),
+    path('showrooms/<int:pk>/balance/', views.ShowroomBalanceView.as_view(), name='showroom_balance'),
+    path('showrooms/<int:pk>/statement/export/', views.export_showroom_statement, name='showroom_statement_export'),
 
     # Cards
     path('cards/', views.CardListView.as_view(), name='card_list'),
@@ -65,8 +68,8 @@ path('card/<int:pk>/requests/', views.card_requests, name='card_requests'),
     path('reports/services/', views.ServiceReportView.as_view(), name='service_report'),
     path('reports/card-lookup/', views.CardLookupView.as_view(), name='card_lookup'),
 
-    # Invoices (overage / metered usage billing)
-    path('invoices/', views.ServiceInvoiceListView.as_view(), name='invoice_list'),
+    # Invoices (card issuance charges + service overage / metered usage billing)
+    path('invoices/', views.InvoiceListView.as_view(), name='invoice_list'),
     path('invoices/export/', views.export_invoices_csv, name='export_invoices_csv'),
     path('invoices/<int:pk>/print/', views.invoice_print, name='invoice_print'),
     path('invoices/<int:pk>/mark-paid/', views.mark_invoice_paid, name='mark_invoice_paid'),

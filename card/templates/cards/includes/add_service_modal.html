@@ -22,7 +22,7 @@
                         <select name="category" id="service_category" class="form-select" required>
                             <option value="">-- Select Category --</option>
                             {% for category in categories %}
-                            <option value="{{ category.pk }}">{{ category.name }} (${{ category.price }})</option>
+                            <option value="{{ category.pk }}">{{ category.name }} ({{ category.price }} JD)</option>
                             {% endfor %}
                         </select>
                     </div>

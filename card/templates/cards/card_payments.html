@@ -59,7 +59,7 @@
                 <div class="row align-items-center">
                     <div class="col">
                         <div class="text-xs text-secondary text-uppercase fw-bold mb-1">Total Value</div>
-                        <div class="h5 mb-0 fw-bold text-gray-800">${{ total_value|floatformat:2 }}</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ total_value|floatformat:2 }} JD</div>
                     </div>
                     <div class="col-auto"><i class="bi bi-cash-stack fs-2 text-gray-300"></i></div>
                 </div>
@@ -72,7 +72,7 @@
                 <div class="row align-items-center">
                     <div class="col">
                         <div class="text-xs text-success text-uppercase fw-bold mb-1">Collected</div>
-                        <div class="h5 mb-0 fw-bold text-gray-800">${{ paid_value|floatformat:2 }}</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ paid_value|floatformat:2 }} JD</div>
                     </div>
                     <div class="col-auto"><i class="bi bi-wallet2 fs-2 text-gray-300"></i></div>
                 </div>
@@ -85,7 +85,7 @@
                 <div class="row align-items-center">
                     <div class="col">
                         <div class="text-xs text-danger text-uppercase fw-bold mb-1">Outstanding</div>
-                        <div class="h5 mb-0 fw-bold text-gray-800">${{ unpaid_value|floatformat:2 }}</div>
+                        <div class="h5 mb-0 fw-bold text-gray-800">{{ unpaid_value|floatformat:2 }} JD</div>
                     </div>
                     <div class="col-auto"><i class="bi bi-exclamation-triangle fs-2 text-gray-300"></i></div>
                 </div>
@@ -157,13 +157,13 @@
                 <td>{{ card.customer.name }}</td>
                 <td>
                     {% if card.showroom %}
-                        <span class="badge bg-info text-dark"><i class="bi bi-building"></i> {{ card.showroom.name }}</span>
+                        <a href="{% url 'showroom_balance' card.showroom.pk %}" class="badge bg-info text-dark text-decoration-none"><i class="bi bi-building"></i> {{ card.showroom.name }}</a>
                     {% else %}
                         <span class="badge bg-secondary"><i class="bi bi-person"></i> Cardholder</span>
                     {% endif %}
                 </td>
                 <td>{{ card.category.name|default:"—" }}</td>
-                <td class="fw-bold">{% if card.category %}${{ card.category.price|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td class="fw-bold">{% if card.category %}{{ card.category.price|floatformat:2 }} JD{% else %}—{% endif %}</td>
                 <td>
                     {% if card.is_paid %}
                         <span class="badge bg-success">Paid</span>

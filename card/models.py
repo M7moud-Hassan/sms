@@ -32,6 +32,17 @@ class Showroom(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def unpaid_cards_total(self):
+        """Sum of category prices for this sponsor's not-yet-paid gifted cards. The
+        counterpart to Customer.unpaid_cards_total: a showroom-gifted card is this
+        sponsor's bill, not the cardholder's."""
+        return sum((c.category.price if c.category else 0) for c in self.cards.all() if not c.is_paid)
+
+    @property
+    def balance(self):
+        return self.unpaid_cards_total
+
 class Service(models.Model):
     LOCATION_CHOICES = [
         (1, 'Single Location'),
@@ -71,9 +82,16 @@ class Customer(models.Model):
 
     @property
     def unpaid_cards_total(self):
-        """Sum of category prices for this cardholder's not-yet-paid cards (Python-side sum,
-        so callers that already prefetched `cards__category` don't trigger extra queries)."""
-        return sum((c.category.price if c.category else 0) for c in self.cards.all() if not c.is_paid)
+        """Sum of category prices for this cardholder's not-yet-paid, self-paid cards
+        (Python-side sum, so callers that already prefetched `cards__category` don't
+        trigger extra queries). Cards gifted by a showroom are that showroom's bill, not
+        the cardholder's - see Card.showroom's help_text ('Leave blank for an individual
+        card') - so they're excluded from the cardholder's personal balance."""
+        return sum(
+            (c.category.price if c.category else 0)
+            for c in self.cards.all()
+            if not c.is_paid and c.showroom_id is None
+        )
 
     @property
     def unpaid_invoices_total(self):

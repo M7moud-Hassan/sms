@@ -14,7 +14,7 @@
                         <select name="service" id="service_{{ card.pk }}" class="form-select" required>
                             <option value="">-- Select Service --</option>
                             {% for service in services %}
-                            <option value="{{ service.pk }}">{{ service.name }} (${{ service.price }})</option>
+                            <option value="{{ service.pk }}">{{ service.name }} ({{ service.price }} JD)</option>
                             {% endfor %}
                         </select>
                     </div>

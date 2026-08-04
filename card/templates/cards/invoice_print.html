@@ -152,14 +152,14 @@
             <tbody>
                 <tr>
                     <td>{{ invoice.service_request.service.name }} — {{ invoice.reason|default:"Additional cost" }}</td>
-                    <td class="num">${{ invoice.amount }}</td>
+                    <td class="num">{{ invoice.amount }} JD</td>
                 </tr>
             </tbody>
         </table>
 
         <div class="totals">
             <table>
-                <tr class="grand"><td>Total Due</td><td class="num">${{ invoice.amount }}</td></tr>
+                <tr class="grand"><td>Total Due</td><td class="num">{{ invoice.amount }} JD</td></tr>
             </table>
         </div>
 

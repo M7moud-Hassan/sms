@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Service Invoices{% endblock %}
+{% block title %}Invoices{% endblock %}
 {% block content %}
 <style>
     #invoiceTable th {
@@ -41,7 +41,7 @@
 <div class="container-fluid" style="margin-top: 20px;">
     <form method="get" id="invoiceFilterForm">
         <div class="row align-items-end mb-1">
-            <!-- Left: dates, search, search/export buttons -->
+            <!-- Left: dates, type, search, search/export buttons -->
             <div class="col-md-8 col-lg-9">
                 <div class="d-flex flex-wrap align-items-center">
                     <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
@@ -51,6 +51,13 @@
                     <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
                         <span class="input-group-text bg-primary text-white px-2">To</span>
                         <input type="date" id="end" name="end" class="form-control" value="{{ effective_end }}" style="min-width: 150px;">
+                    </div>
+                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
+                        <select name="invoice_type" id="invoice_type" class="form-select">
+                            <option value="">All Types</option>
+                            <option value="card" {% if invoice_type == 'card' %}selected{% endif %}>Card Issuance (Web)</option>
+                            <option value="service" {% if invoice_type == 'service' %}selected{% endif %}>Service Charges (Mobile)</option>
+                        </select>
                     </div>
                     <div class="me-3 mb-3">
                         <input type="text" name="q" class="form-control" placeholder="Search Any Additional Field"
@@ -97,42 +104,56 @@
 <table class="table" id="invoiceTable">
   <thead>
     <tr>
-      <th>Number <span class="arrow no-sort"></span></th>
-      <th>Invoice Date <span class="arrow no-sort"></span></th>
-      <th>Payment System <span class="arrow no-sort"></span></th>
+      <th>Type <span class="arrow no-sort"></span></th>
+      <th>Reference <span class="arrow no-sort"></span></th>
+      <th>Date <span class="arrow no-sort"></span></th>
       <th>Cardholder <span class="arrow no-sort"></span></th>
-      <th>Amount <span class="arrow no-sort"></span></th>
+      <th>Billed To <span class="arrow no-sort"></span></th>
       <th>Vehicle No. <span class="arrow no-sort"></span></th>
-      <th>Driver Name <span class="arrow no-sort"></span></th>
-      <th>Status <span class="arrow no-sort"></span></th>
-      <th>Created at <span class="arrow no-sort"></span></th>
+      <th>Driver <span class="arrow no-sort"></span></th>
+      <th>Description <span class="arrow no-sort"></span></th>
       <th>Notes <span class="arrow no-sort"></span></th>
+      <th>Amount <span class="arrow no-sort"></span></th>
+      <th>Status <span class="arrow no-sort"></span></th>
+      <th>Payment Method <span class="arrow no-sort"></span></th>
       <th>Actions</th>
     </tr>
   </thead>
   <tbody>
   {% for invoice in invoices %}
   <tr>
-    <td class="align-middle">{{ invoice.invoice_number }}</td>
-    <td class="align-middle">{{ invoice.created_at|date:"Y-m-d" }}</td>
-    <td class="align-middle">{{ invoice.get_payment_method_display|default:"—" }}</td>
-    <td class="align-middle">{{ invoice.service_request.card.customer.name }}</td>
-    <td class="align-middle">${{ invoice.amount|floatformat:2 }}</td>
-    <td class="align-middle">{{ invoice.service_request.card.vehicle_number|default:"—" }}</td>
-    <td class="align-middle">{{ invoice.service_request.mission.driver.name|default:"—" }}</td>
     <td class="align-middle">
-        <span class="badge bg-{% if invoice.status == 'paid' %}success{% elif invoice.status == 'cancelled' %}secondary{% else %}danger{% endif %}">
-            {{ invoice.get_status_display }}
-        </span>
+        {% if invoice.source == 'card' %}
+            <span class="badge bg-primary"><i class="bi bi-credit-card-2-front"></i> Card</span>
+        {% else %}
+            <span class="badge bg-info text-dark"><i class="bi bi-phone"></i> Service</span>
+        {% endif %}
     </td>
-    <td class="align-middle">{{ invoice.created_at|date:"Y-m-d H:i" }}</td>
-    <td class="align-middle">{{ invoice.reason|default:"" }}</td>
+    <td class="align-middle"><a href="{{ invoice.detail_url }}">{{ invoice.reference }}</a></td>
+    <td class="align-middle">{{ invoice.date|date:"Y-m-d H:i" }}</td>
+    <td class="align-middle">{{ invoice.cardholder }}</td>
+    <td class="align-middle">{{ invoice.billed_to }}</td>
+    <td class="align-middle">{{ invoice.vehicle_number|default:"—" }}</td>
+    <td class="align-middle">{{ invoice.driver_name|default:"—" }}</td>
+    <td class="align-middle">{{ invoice.description }}</td>
+    <td class="align-middle">{{ invoice.notes|default:"" }}</td>
+    <td class="align-middle">{{ invoice.amount|floatformat:2 }} JD</td>
+    <td class="align-middle">
+        <span class="badge bg-{{ invoice.status_css }}">{{ invoice.status_label }}</span>
+    </td>
+    <td class="align-middle">{{ invoice.payment_method_label }}</td>
     <td class="align-middle text-nowrap">
-        <a href="{% url 'invoice_print' invoice.pk %}" target="_blank" class="btn btn-sm btn-outline-primary" title="Print">
+        <a href="{{ invoice.detail_url }}" class="btn btn-sm btn-outline-secondary" title="View">
+            <i class="bi bi-eye"></i>
+        </a>
+        {% if invoice.print_url %}
+        <a href="{{ invoice.print_url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Print">
             <i class="bi bi-printer"></i>
         </a>
-        {% if invoice.status == 'unpaid' %}
-        <button type="button" class="btn btn-sm btn-outline-success mark-paid-btn" data-invoice-id="{{ invoice.pk }}" title="Mark Paid">
+        {% endif %}
+        {% if not invoice.is_paid %}
+        <button type="button" class="btn btn-sm btn-outline-success mark-paid-btn"
+                data-source="{{ invoice.source }}" data-pk="{{ invoice.pk }}" title="Mark Paid">
             <i class="bi bi-check-circle"></i>
         </button>
         {% endif %}
@@ -140,7 +161,7 @@
   </tr>
   {% empty %}
   <tr>
-    <td colspan="11" class="text-center no-data-message" style="position: relative;">
+    <td colspan="13" class="text-center no-data-message" style="position: relative;">
         <span class="no-data-text">No data available</span>
     </td>
   </tr>
@@ -184,22 +205,25 @@
   </div>
 </div>
 
-<!-- Mark Paid Modal (captures how the invoice was settled) -->
+<!-- Mark Paid Modal (captures how the charge was settled; hidden for card-issuance rows,
+     which don't track a payment method) -->
 <div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="markPaidModalLabel"><i class="bi bi-check-circle"></i> Mark Invoice Paid</h5>
+                <h5 class="modal-title" id="markPaidModalLabel"><i class="bi bi-check-circle"></i> Mark Paid</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <label for="markPaidMethod" class="form-label fw-bold">Payment Method</label>
-                <select id="markPaidMethod" class="form-select">
-                    <option value="">-- Not specified --</option>
-                    {% for value, label in payment_method_choices %}
-                    <option value="{{ value }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
+                <div id="markPaidMethodWrapper">
+                    <label for="markPaidMethod" class="form-label fw-bold">Payment Method</label>
+                    <select id="markPaidMethod" class="form-select">
+                        <option value="">-- Not specified --</option>
+                        {% for value, label in payment_method_choices %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -210,11 +234,12 @@
 </div>
 
 <script>
-    // Auto-submit the filter form when a date or quick-filter radio changes.
+    // Auto-submit the filter form when a date, type, or quick-filter radio changes.
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('invoiceFilterForm');
         document.getElementById('start').addEventListener('change', () => form.submit());
         document.getElementById('end').addEventListener('change', () => form.submit());
+        document.getElementById('invoice_type').addEventListener('change', () => form.submit());
         document.querySelectorAll('.quick-filter-radio').forEach(function(radio) {
             radio.addEventListener('change', () => form.submit());
         });
@@ -267,37 +292,48 @@
         }
     });
 
-    const markPaidUrlTemplate = "{% url 'mark_invoice_paid' 0 %}";  // .../0/mark-paid/ -> swap the 0 for the real pk
+    const toggleCardPaidUrlTemplate = "{% url 'toggle_card_paid' 0 %}";  // .../0/toggle/ -> swap the 0 for the real pk
+    const markInvoicePaidUrlTemplate = "{% url 'mark_invoice_paid' 0 %}";  // .../0/mark-paid/ -> swap the 0 for the real pk
     const markPaidModalEl = document.getElementById('markPaidModal');
     const markPaidModal = new bootstrap.Modal(markPaidModalEl);
-    let pendingInvoiceId = null;
+    const markPaidMethodWrapper = document.getElementById('markPaidMethodWrapper');
+    let pendingSource = null;
+    let pendingPk = null;
 
     document.querySelectorAll('.mark-paid-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            pendingInvoiceId = this.dataset.invoiceId;
+            pendingSource = this.dataset.source;
+            pendingPk = this.dataset.pk;
             document.getElementById('markPaidMethod').value = '';
+            // Cards don't track a payment method - only show that field for service charges.
+            markPaidMethodWrapper.style.display = (pendingSource === 'card') ? 'none' : '';
             markPaidModal.show();
         });
     });
 
     document.getElementById('confirmMarkPaidBtn').addEventListener('click', function() {
-        if (!pendingInvoiceId) return;
-        const method = document.getElementById('markPaidMethod').value;
-        const url = markPaidUrlTemplate.replace('/0/mark-paid/', `/${pendingInvoiceId}/mark-paid/`);
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''
-            },
-            body: new URLSearchParams({ method: method })
-        })
+        if (!pendingPk) return;
+        const csrftoken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+        let url, options;
+        if (pendingSource === 'card') {
+            url = toggleCardPaidUrlTemplate.replace('/0/toggle/', `/${pendingPk}/toggle/`);
+            options = { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrftoken } };
+        } else {
+            const method = document.getElementById('markPaidMethod').value;
+            url = markInvoicePaidUrlTemplate.replace('/0/mark-paid/', `/${pendingPk}/mark-paid/`);
+            options = {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrftoken },
+                body: new URLSearchParams({ method: method })
+            };
+        }
+        fetch(url, options)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 location.reload();
             } else {
-                alert(data.error || 'Could not mark invoice as paid.');
+                alert(data.error || 'Could not mark as paid.');
             }
         })
         .catch(error => console.error('Error:', error));
