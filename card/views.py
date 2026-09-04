@@ -762,13 +762,18 @@ class SubmitServiceRequestView(CreateView):
         card_uuid = self.kwargs.get('card_uuid')
         if card_uuid is not None:
             self.card = get_object_or_404(Card, uuid=card_uuid, is_active=True)
+            # The QR scan page sends the browser location, so it is mandatory here.
+            self.require_location = True
         else:
             self.card = get_object_or_404(Card, pk=self.kwargs.get('card_id'), is_active=True)
+            self.require_location = False
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['card'] = self.card
+        kwargs['require_location'] = self.require_location
+        kwargs['require_contact_phone'] = self.require_location
         return kwargs
 
     def form_valid(self, form):

@@ -149,10 +149,21 @@ class ServiceRequestForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.card = kwargs.pop('card', None)
+        # The QR scan page captures the browser location and must not submit without it;
+        # the legacy camera portal has no location capture, so it stays optional there.
+        self.require_location = kwargs.pop('require_location', False)
+        # Same for the contact phone: the QR scan page always asks for it.
+        self.require_contact_phone = kwargs.pop('require_contact_phone', False)
         super().__init__(*args, **kwargs)
         self.fields['latitude'].required = False
         self.fields['longitude'].required = False
         self.fields['location_accuracy'].required = False
+        if self.require_contact_phone:
+            self.fields['contact_phone'].required = True
+            self.fields['contact_phone'].error_messages['required'] = 'يجب إدخال رقم هاتف للتواصل معك.'
+            self.fields['contact_phone'].error_messages['invalid'] = (
+                'رقم الهاتف غير صحيح. أدخل رقمًا أردنيًا مثل 0791234567.'
+            )
         if self.card:
             # تقتصر الخدمات على تلك التي لها رصيد > 0 لهذه البطاقة
             self.fields['service'].queryset = Service.objects.filter(
@@ -160,6 +171,18 @@ class ServiceRequestForm(forms.ModelForm):
                 card_quotas__remaining_uses__gt=0
             ).distinct()
             self.fields['service'].empty_label = "-- Select a service --"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.require_location:
+            if cleaned_data.get('latitude') is None or cleaned_data.get('longitude') is None:
+                raise forms.ValidationError(
+                    'يجب السماح بالوصول إلى موقعك الجغرافي لإرسال الطلب. '
+                    'فعّل خدمة الموقع في المتصفح ثم أعد المحاولة.'
+                )
+        return cleaned_data
+
+
 class RequestStatusUpdateForm(forms.ModelForm):
     class Meta:
         model = ServiceRequest

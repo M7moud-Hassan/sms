@@ -15,6 +15,16 @@
                             <tr><th>Service</th><td>{{ request.service.name }}</td></tr>
                             <tr><th>Card</th><td>{{ request.card.number_card }}</td></tr>
                             <tr><th>Cardholder</th><td>{{ request.card.customer.name }}</td></tr>
+                            <tr>
+                                <th>Contact Phone</th>
+                                <td>
+                                    {% with phone=request.contact_phone|default:request.card.customer.phone %}
+                                        {% if phone %}
+                                            <a href="tel:{{ phone }}">{{ phone }}</a>
+                                        {% else %}—{% endif %}
+                                    {% endwith %}
+                                </td>
+                            </tr>
                             <tr><th>Requested At</th><td>{{ request.requested_at|date:"Y-m-d H:i" }}</td></tr>
                         </table>
                     </div>

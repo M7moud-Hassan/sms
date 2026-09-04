@@ -182,9 +182,18 @@
                             <input type="hidden" name="latitude" id="id_latitude">
                             <input type="hidden" name="longitude" id="id_longitude">
                             <input type="hidden" name="location_accuracy" id="id_location_accuracy">
-                            <div id="location-status" class="alert alert-light border small d-flex align-items-center gap-2 mb-3">
-                                <i class="bi bi-geo-alt-fill text-primary"></i>
-                                <span id="location-status-text">جارٍ تحديد موقعك لتسريع وصول الخدمة إليك...</span>
+                            <div id="location-status" class="alert alert-warning border small mb-3" dir="rtl">
+                                <div class="d-flex align-items-start gap-2">
+                                    <i id="location-status-icon" class="bi bi-geo-alt-fill text-warning fs-5 flex-shrink-0"></i>
+                                    <span id="location-status-text">جارٍ تحديد موقعك... يُرجى الضغط على "السماح" لمشاركة موقعك.</span>
+                                </div>
+                                <div id="location-help" class="d-none mt-2 ps-4">
+                                    <span class="d-block">لتفعيل الإذن: افتح إعدادات المتصفح ← أذونات الموقع (Location) ← اسمح لهذا الموقع، ثم اضغط "إعادة المحاولة".</span>
+                                    <span id="location-help-insecure" class="d-none text-muted">ملاحظة: بعض المتصفحات تمنع تحديد الموقع على الروابط غير المؤمّنة (HTTP).</span>
+                                </div>
+                                <button type="button" id="location-retry" class="btn btn-sm btn-outline-dark mt-2 d-none">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>إعادة المحاولة
+                                </button>
                             </div>
                             <div class="mb-3">
                                 <label for="id_service" class="form-label fw-600">Select available service *</label>
@@ -202,6 +211,18 @@
                                 <div class="form-text mt-1">
                                     <i class="bi bi-info-circle"></i>
                                     Each use deducts one from your remaining quota.
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="id_contact_phone" class="form-label fw-600">Contact phone *</label>
+                                <input type="tel" name="contact_phone" id="id_contact_phone"
+                                       class="form-control" inputmode="tel" required
+                                       value="{{ card.customer.phone|default:'' }}"
+                                       placeholder="07XXXXXXXX">
+                                <div class="form-text mt-1" dir="rtl">
+                                    <i class="bi bi-telephone"></i>
+                                    رقم الهاتف الذي سيتواصل معك عليه الفني — مطلوب.
                                 </div>
                             </div>
 
@@ -232,7 +253,7 @@
                                 <textarea name="notes" id="id_notes" class="form-control"
                                           rows="3" placeholder="e.g., vehicle issues, special requests..."></textarea>
                             </div>
-                            <button type="submit" class="btn btn-submit text-white w-100 btn-lg">
+                            <button type="submit" id="submitBtn" class="btn btn-submit text-white w-100 btn-lg" disabled>
                                 <i class="bi bi-check-circle me-2"></i>Submit Request
                             </button>
                         </form>
@@ -258,32 +279,99 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         (function() {
+            // The request cannot be submitted without the browser location: the submit button stays
+            // disabled until getCurrentPosition succeeds, and the server rejects a request without it.
             const statusText = document.getElementById('location-status-text');
             const statusBox = document.getElementById('location-status');
+            const statusIcon = document.getElementById('location-status-icon');
+            const helpBox = document.getElementById('location-help');
+            const helpInsecure = document.getElementById('location-help-insecure');
+            const retryBtn = document.getElementById('location-retry');
+            const submitBtn = document.getElementById('submitBtn');
+            const latInput = document.getElementById('id_latitude');
+            const lngInput = document.getElementById('id_longitude');
+            const accInput = document.getElementById('id_location_accuracy');
+            let locationReady = false;
+
+            function setBoxState(state, iconClass) {
+                statusBox.classList.remove('alert-light', 'alert-warning', 'alert-success', 'alert-danger');
+                statusBox.classList.add(state);
+                statusIcon.className = iconClass;
+            }
+
+            function setPending() {
+                locationReady = false;
+                if (submitBtn) submitBtn.disabled = true;
+                setBoxState('alert-warning', 'bi bi-geo-alt-fill text-warning fs-5 flex-shrink-0');
+                statusText.textContent = 'جارٍ تحديد موقعك... يُرجى الضغط على "السماح" لمشاركة موقعك.';
+                helpBox.classList.add('d-none');
+                retryBtn.classList.add('d-none');
+            }
+
+            function setDenied(message, showHelp) {
+                locationReady = false;
+                latInput.value = '';
+                lngInput.value = '';
+                accInput.value = '';
+                if (submitBtn) submitBtn.disabled = true;
+                setBoxState('alert-danger', 'bi bi-exclamation-triangle-fill text-danger fs-5 flex-shrink-0');
+                statusText.textContent = message;
+                retryBtn.classList.remove('d-none');
+                if (showHelp) {
+                    helpBox.classList.remove('d-none');
+                    if (!window.isSecureContext) helpInsecure.classList.remove('d-none');
+                } else {
+                    helpBox.classList.add('d-none');
+                }
+            }
+
+            function setReady(pos) {
+                // Rounded to 6 decimal places to match the server's DecimalField(max_digits=9, decimal_places=6) —
+                // raw JS float precision has too many decimal digits and fails that validation.
+                latInput.value = pos.coords.latitude.toFixed(6);
+                lngInput.value = pos.coords.longitude.toFixed(6);
+                accInput.value = Math.round(pos.coords.accuracy);
+                locationReady = true;
+                if (submitBtn) submitBtn.disabled = false;
+                setBoxState('alert-success', 'bi bi-check-circle-fill text-success fs-5 flex-shrink-0');
+                statusText.textContent = 'تم تحديد موقعك بنجاح ✓';
+                helpBox.classList.add('d-none');
+                retryBtn.classList.add('d-none');
+            }
 
             function captureLocation() {
                 if (!statusText) return;
                 if (!navigator.geolocation) {
-                    statusText.textContent = 'متصفحك لا يدعم تحديد الموقع، يمكنك المتابعة بدون ذلك.';
+                    setDenied('متصفحك لا يدعم تحديد الموقع، ولا يمكن إرسال الطلب بدونه. جرّب متصفحًا آخر.', true);
                     return;
                 }
+                setPending();
                 navigator.geolocation.getCurrentPosition(
-                    function(pos) {
-                        // Rounded to 6 decimal places to match the server's DecimalField(max_digits=9, decimal_places=6) —
-                        // raw JS float precision has too many decimal digits and fails that validation.
-                        document.getElementById('id_latitude').value = pos.coords.latitude.toFixed(6);
-                        document.getElementById('id_longitude').value = pos.coords.longitude.toFixed(6);
-                        document.getElementById('id_location_accuracy').value = pos.coords.accuracy;
-                        statusText.textContent = 'تم تحديد موقعك بنجاح ✓';
-                        statusBox.classList.remove('alert-light');
-                        statusBox.classList.add('alert-success');
+                    setReady,
+                    function(err) {
+                        if (err && err.code === 1) {
+                            setDenied('لم يتم السماح بالوصول إلى موقعك. يجب السماح بالموقع الجغرافي لإرسال الطلب.', true);
+                        } else if (err && err.code === 3) {
+                            setDenied('انتهت مهلة تحديد الموقع. تأكد من تفعيل خدمة الموقع (GPS) ثم أعد المحاولة.', false);
+                        } else {
+                            setDenied('تعذّر تحديد موقعك. تأكد من تفعيل خدمة الموقع (GPS) ثم أعد المحاولة.', false);
+                        }
                     },
-                    function() {
-                        statusText.textContent = 'تعذّر تحديد موقعك (اختياري) — يمكنك إكمال الطلب بدونه.';
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
                 );
             }
+
+            if (retryBtn) retryBtn.addEventListener('click', captureLocation);
+
+            // Re-capture automatically if the user grants the permission from the browser settings.
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'geolocation' }).then(function(status) {
+                    status.onchange = function() {
+                        if (status.state === 'granted' && !locationReady) captureLocation();
+                    };
+                }).catch(function() {});
+            }
+
             captureLocation();
 
             const serviceSelect = document.getElementById('id_service');
@@ -337,7 +425,12 @@
             if (form) {
                 form.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (!locationReady || !latInput.value || !lngInput.value) {
+                        alert('يجب السماح بالوصول إلى موقعك الجغرافي لإرسال الطلب.');
+                        statusBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        captureLocation();
+                        return;
+                    }
                     const originalText = submitBtn.innerHTML;
                     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Submitting...';
                     submitBtn.disabled = true;
@@ -354,10 +447,19 @@
                         } else {
                             console.error('Validation errors:', data.errors);
                             let msg = 'Submission failed. Please check your selection and try again.';
+                            const fieldLabels = {
+                                contact_phone: 'رقم الهاتف',
+                                service: 'الخدمة',
+                                from_location: 'الموقع',
+                                to_location: 'موقع التسليم',
+                                latitude: 'الموقع الجغرافي',
+                                longitude: 'الموقع الجغرافي'
+                            };
                             if (data.errors) {
                                 const details = Object.entries(data.errors).map(function([field, errs]) {
                                     const text = Array.isArray(errs) ? errs.map(function(e) { return e.message || e; }).join(', ') : errs;
-                                    return field + ': ' + text;
+                                    if (field === '__all__') return text;
+                                    return (fieldLabels[field] || field) + ': ' + text;
                                 }).join('\n');
                                 if (details) msg += '\n\n' + details;
                             }

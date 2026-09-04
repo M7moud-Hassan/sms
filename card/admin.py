@@ -4,7 +4,17 @@ from card.models import ServiceRequest, ServiceQuota, Card, Service, Showroom, F
 
 # Register your models here.
 
-admin.site.register(ServiceRequest)
+@admin.register(ServiceRequest)
+class ServiceRequestAdmin(admin.ModelAdmin):
+    list_display = ('request_number', 'card', 'customer_name', 'contact_phone',
+                    'service', 'status', 'requested_at')
+    list_filter = ('status', 'service')
+    search_fields = ('request_number', 'card__number_card', 'card__customer__name', 'contact_phone')
+    readonly_fields = ('requested_at', 'latitude', 'longitude', 'location_accuracy')
+
+    @admin.display(description='Cardholder', ordering='card__customer__name')
+    def customer_name(self, obj):
+        return obj.card.customer.name
 
 
 @admin.register(Showroom)
