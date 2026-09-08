@@ -1,187 +1,196 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Print Card #{{ card.number_card }}</title>
     <style>
+        /* Bahij Janna is the typeface of the SMT card artwork; the plates below carry
+           the static text, these faces only render the live card data drawn on top. */
+        @font-face {
+            font-family: 'Bahij Janna';
+            src: url("{% static 'cards/bahij-janna-regular.woff2' %}") format('woff2');
+            font-weight: 400;
+            font-display: block;
+        }
+        @font-face {
+            font-family: 'Bahij Janna';
+            src: url("{% static 'cards/bahij-janna-bold.woff2' %}") format('woff2');
+            font-weight: 700;
+            font-display: block;
+        }
+
+        /* The artwork is 9cm x 5.5cm, i.e. 255.12pt x 155.91pt, so one PDF point of the
+           original design maps 1:1 onto one CSS point here. Every offset below is taken
+           straight from the design file. */
+        :root {
+            --card-w: 90mm;
+            --card-h: 55mm;
+        }
+
         body {
             margin: 0;
-            padding: 0;
-            background: #e0e0e0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            font-family: 'Courier New', monospace;
+            padding: 10mm;
+            background: #e9ecef;
+            font-family: 'Bahij Janna', 'Segoe UI', Tahoma, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
-        .card-container {
-            width: 85.6mm;
-            height: 53.98mm;
-            background: linear-gradient(145deg, #ffffff 0%, #f5f5f5 100%);
+        .sheet {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6mm;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .side { text-align: center; }
+        .side-label {
+            font-size: 9pt;
+            color: #6c757d;
+            margin-bottom: 2mm;
+            letter-spacing: 0.5pt;
+        }
+
+        .card {
+            position: relative;
+            width: var(--card-w);
+            height: var(--card-h);
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
             border-radius: 3mm;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            padding: 3mm 4mm;
-            box-sizing: border-box;
-            page-break-after: avoid;
-            border: 1px solid #ccc;
-        }
-        .main-row {
-            display: flex;
-            gap: 3mm;
-            height: 100%;
-        }
-        /* QR gets its own dedicated column so it can be printed large and clear */
-        .qr-col {
-            width: 26mm;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-        .qr {
-            background: #ffffff;
-            padding: 1mm;
-            border-radius: 1.5mm;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-            line-height: 0;
-        }
-        .qr img {
-            width: 22mm;
-            height: 22mm;
-            image-rendering: pixelated;
-        }
-        .qr-caption {
-            margin-top: 1.2mm;
-            font-size: 5.5pt;
-            line-height: 1.3;
-            text-align: center;
-            color: #333;
-        }
-        .info-col {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px dashed #aaa;
-            padding-bottom: 1.5mm;
-        }
-        .card-number {
-            font-size: 9.5pt;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .logo {
-            font-size: 12pt;
-            font-weight: 900;
-            color: #3498db;
-        }
-        .info {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            font-size: 7.5pt;
-            margin: 1mm 0;
-        }
-        .info-row {
-            display: flex;
-            margin-bottom: 0.6mm;
-        }
-        .label {
-            width: 20mm;
-            flex-shrink: 0;
-            font-weight: bold;
-            color: #555;
-        }
-        .value {
-            color: #000;
             overflow: hidden;
-            text-overflow: ellipsis;
+            color: #ffffff;
+        }
+        .card-front { background-image: url("{% static 'cards/smt-card-front.png' %}"); }
+        .card-back  { background-image: url("{% static 'cards/smt-card-back.png' %}"); }
+
+        /* One value slot per dark field box on the front artwork. */
+        .field {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 7.54pt;
+            font-weight: 400;
+            line-height: 1;
+            padding: 0 2pt;
+            box-sizing: border-box;
+            white-space: nowrap;
+            overflow: hidden;
+            width: 74.3pt;
+            height: 10.3pt;
+        }
+        .col-left  { left: 16.8pt; }
+        .col-right { left: 100.2pt; }
+        .row-1 { top: 65.4pt; }
+        .row-2 { top: 90.2pt; }
+        .row-3 { top: 114.9pt; }
+
+        .card-id {
+            position: absolute;
+            left: 16pt;
+            top: 133.8pt;
+            height: 13.1pt;
+            display: flex;
+            align-items: center;
+            font-size: 8pt;
+            font-weight: 700;
+            letter-spacing: 2.4pt;
             white-space: nowrap;
         }
-        .footer-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top: 1px dashed #aaa;
-            padding-top: 1.5mm;
-            font-size: 7pt;
+
+        /* Sits exactly on the light placeholder square of the back artwork. */
+        .qr {
+            position: absolute;
+            left: 165.8pt;
+            top: 27.1pt;
+            width: 62.3pt;
+            height: 62.3pt;
+            border-radius: 2mm;
+            background: #ffffff;
+            overflow: hidden;
         }
-        .status {
-            padding: 0.5mm 2mm;
-            border-radius: 1mm;
-            font-weight: bold;
-            font-size: 7pt;
-            color: white;
-            background-color: {{ card.is_active|yesno:'#28a745,#6c757d' }};
+        .qr img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
         }
+
+        .toolbar {
+            text-align: center;
+            margin-bottom: 6mm;
+        }
+        .toolbar button {
+            font: inherit;
+            font-size: 10pt;
+            padding: 2mm 6mm;
+            border: none;
+            border-radius: 2mm;
+            background: #ed1c24;
+            color: #fff;
+            cursor: pointer;
+        }
+
         @media print {
-            body { background: none; }
-            .card-container { box-shadow: none; border: 1px solid #000; }
+            body { background: none; padding: 0; }
+            .toolbar, .side-label { display: none; }
+            .sheet { gap: 4mm; }
+            .card { border-radius: 0; }
+            @page { margin: 8mm; }
         }
     </style>
 </head>
 <body>
-    <div class="card-container">
-        <div class="main-row">
-            <!-- Large, high-contrast QR with a clean quiet zone for reliable phone-camera scans -->
-            <div class="qr-col">
-                <div class="qr">
-                    {% if card.qr_code %}
-                        <img src="{{ card.qr_code.url }}" alt="QR">
-                    {% endif %}
-                </div>
-                <div class="qr-caption">امسح لطلب خدمة<br>Scan to Request</div>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">طباعة البطاقة / Print</button>
+    </div>
+
+    <div class="sheet">
+        <div class="side">
+            <div class="side-label">Front — الوجه الأمامي</div>
+            <div class="card card-front">
+                <div class="field col-left  row-1">{{ card.customer.name }}</div>
+                <div class="field col-right row-1">{{ card.vehicle_number|default:"" }}</div>
+                <div class="field col-left  row-2">{{ card.chassis_number|default:"" }}</div>
+                <div class="field col-right row-2">{{ card.type_car|default:"" }}</div>
+                <div class="field col-left  row-3">{{ card.color_car|default:"" }}</div>
+                <div class="field col-right row-3">{{ card.end_at|date:"d-m-Y" }}</div>
+                <div class="card-id">ID: {{ card.number_card }}</div>
             </div>
-            <div class="info-col">
-                <div class="header">
-                    <span class="logo">CARDMASTER</span>
-                    <span class="card-number">{{ card.number_card }}</span>
-                </div>
-                <div class="info">
-                    <div class="info-row">
-                        <span class="label">Cardholder:</span>
-                        <span class="value">{{ card.customer.name }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="label">Vehicle:</span>
-                        <span class="value">{{ card.vehicle_number|default:"—" }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="label">Chassis:</span>
-                        <span class="value">{{ card.chassis_number|default:"—" }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="label">Car Type:</span>
-                        <span class="value">{{ card.type_car|default:"—" }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="label">Color:</span>
-                        <span class="value">{{ card.color_car|default:"—" }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="label">Valid until:</span>
-                        <span class="value">{{ card.end_at|date:"Y-m-d" }}</span>
-                    </div>
-                </div>
-                <div class="footer-row">
-                    <div class="status">
-                        {{ card.is_active|yesno:"ACTIVE,INACTIVE" }}
-                    </div>
-                </div>
+        </div>
+
+        <div class="side">
+            <div class="side-label">Back — الوجه الخلفي</div>
+            <div class="card card-back">
+                {% if card.qr_code %}
+                    <div class="qr"><img src="{{ card.qr_code.url }}" alt="QR"></div>
+                {% endif %}
             </div>
         </div>
     </div>
+
     <script>
-        window.onload = function() { window.print(); }
+        // A long VIN or customer name would otherwise fill the whole box edge to edge,
+        // so shrink those few values until they fit inside the artwork's field box.
+        function fitValues() {
+            document.querySelectorAll('.field').forEach(function(el) {
+                let size = 7.54;
+                while (el.scrollWidth > el.clientWidth && size > 4.5) {
+                    size -= 0.2;
+                    el.style.fontSize = size.toFixed(2) + 'pt';
+                }
+            });
+        }
+
+        // Wait for the artwork and fonts so the print preview is never missing them.
+        window.addEventListener('load', function() {
+            const ready = document.fonts ? document.fonts.ready : Promise.resolve();
+            ready.then(function() {
+                fitValues();
+                window.print();
+            });
+        });
     </script>
 </body>
 </html>
