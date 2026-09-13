@@ -50,8 +50,17 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="from_location{{ request.pk }}" class="form-label fw-bold">Receiving Location</label>
-                                <input type="text" name="from_location" id="from_location{{ request.pk }}" class="form-control"
-                                       value="{% if request.mission %}{{ request.mission.from_location }}{% else %}{{ request.from_location }}{% endif %}">
+                                <div class="input-group">
+                                    <input type="text" name="from_location" id="from_location{{ request.pk }}" class="form-control"
+                                           value="{% if request.mission %}{{ request.mission.from_location }}{% else %}{{ request.from_location }}{% endif %}">
+                                    {% if request.latitude and request.longitude %}
+                                        <button type="button" class="btn btn-outline-info mission-map-btn" data-request="{{ request.pk }}"
+                                                data-lat="{{ request.latitude }}" data-lng="{{ request.longitude }}"
+                                                title="عرض موقع العميل على الخريطة">
+                                            <i class="bi bi-geo-alt-fill"></i>
+                                        </button>
+                                    {% endif %}
+                                </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label for="to_location{{ request.pk }}" class="form-label fw-bold">Delivery Location</label>
@@ -63,10 +72,38 @@
                         <!-- One location -->
                         <div class="mb-3">
                             <label for="from_location{{ request.pk }}" class="form-label fw-bold">Location</label>
-                            <input type="text" name="from_location" id="from_location{{ request.pk }}" class="form-control"
-                                   value="{% if request.mission %}{{ request.mission.from_location }}{% else %}{{ request.from_location }}{% endif %}">
+                            <div class="input-group">
+                                <input type="text" name="from_location" id="from_location{{ request.pk }}" class="form-control"
+                                       value="{% if request.mission %}{{ request.mission.from_location }}{% else %}{{ request.from_location }}{% endif %}">
+                                {% if request.latitude and request.longitude %}
+                                    <button type="button" class="btn btn-outline-info mission-map-btn" data-request="{{ request.pk }}"
+                                            data-lat="{{ request.latitude }}" data-lng="{{ request.longitude }}"
+                                            title="عرض موقع العميل على الخريطة">
+                                        <i class="bi bi-geo-alt-fill"></i>
+                                    </button>
+                                {% endif %}
+                            </div>
                         </div>
                         <input type="hidden" name="to_location" value="">
+                    {% endif %}
+
+                    <!-- Cardholder's GPS point, sent by the phone when the request was made.
+                         Kept inside this modal instead of opening a second one on top of it. -->
+                    {% if request.latitude and request.longitude %}
+                        <div class="mb-3 d-none" id="missionMapWrap{{ request.pk }}">
+                            <div id="missionMap{{ request.pk }}" style="height: 240px; border-radius: 8px;"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-2 small">
+                                <span id="missionMapInfo{{ request.pk }}" class="text-muted">
+                                    موقع العميل وقت الطلب
+                                    {% if request.location_accuracy %}— دقة ±{{ request.location_accuracy|floatformat:0 }} م{% endif %}
+                                </span>
+                                <a class="btn btn-sm btn-primary"
+                                   href="https://www.google.com/maps/dir/?api=1&destination={{ request.latitude }},{{ request.longitude }}"
+                                   target="_blank" rel="noopener">
+                                    <i class="bi bi-signpost-split"></i> Google Maps
+                                </a>
+                            </div>
+                        </div>
                     {% endif %}
 
                     <!-- Cost -->
@@ -117,9 +154,39 @@
             return;
         }
 
+        // Toggle the inline map. Leaflet is loaded further down request_list.html, so it is
+        // only referenced here inside the click handler; if it is missing we hand the point
+        // to Google Maps instead of failing silently.
+        const mapBtn = document.querySelector('.mission-map-btn[data-request="{{ request.pk }}"]');
+        if (mapBtn) {
+            const lat = parseFloat(mapBtn.dataset.lat);
+            const lng = parseFloat(mapBtn.dataset.lng);
+            let map = null;
+            mapBtn.addEventListener('click', function() {
+                const wrap = document.getElementById('missionMapWrap{{ request.pk }}');
+                if (typeof L === 'undefined') {
+                    window.open('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng, '_blank');
+                    return;
+                }
+                const wasHidden = wrap.classList.contains('d-none');
+                wrap.classList.toggle('d-none');
+                if (!wasHidden) return;
+                if (!map) {
+                    map = L.map('missionMap{{ request.pk }}').setView([lat, lng], 15);
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 19,
+                        attribution: 'Tiles &copy; Esri'
+                    }).addTo(map);
+                    L.marker([lat, lng]).addTo(map)
+                        .bindPopup('{{ request.card.customer.name|escapejs }}').openPopup();
+                }
+                setTimeout(function() { map.invalidateSize(); map.setView([lat, lng], 15); }, 150);
+            });
+        }
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const originalText = submitBtn.innerHTML;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
             submitBtn.disabled = true;

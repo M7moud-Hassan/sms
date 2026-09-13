@@ -75,6 +75,19 @@
                                 </label>
                             </div>
                         </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_terms_en_{{ card.pk }}" class="form-label fw-bold">Terms &amp; Conditions (English)</label>
+                            <textarea name="terms_en" id="id_terms_en_{{ card.pk }}" class="form-control" rows="3"
+                                      placeholder="One condition per line">{{ card.terms_en|default:'' }}</textarea>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_terms_ar_{{ card.pk }}" class="form-label fw-bold">الشروط والأحكام (عربي)</label>
+                            <textarea name="terms_ar" id="id_terms_ar_{{ card.pk }}" class="form-control" rows="3" dir="rtl"
+                                      placeholder="بند في كل سطر">{{ card.terms_ar|default:'' }}</textarea>
+                            <div class="form-text text-muted small">
+                                One condition per line. A language is printed on the back of the card only when it has text.
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">

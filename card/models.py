@@ -116,6 +116,10 @@ class Card(models.Model):
     chassis_number = models.CharField(max_length=50, null=True, blank=True)
     type_car = models.CharField(max_length=100, null=True, blank=True)
     color_car = models.CharField(max_length=50, null=True, blank=True)
+    # Printed on the back of the card, one bullet per line. Each language prints only
+    # when it has text, so a card can carry Arabic terms, English terms, or both.
+    terms_en = models.TextField(blank=True, null=True, help_text="Terms & Conditions in English - one condition per line")
+    terms_ar = models.TextField(blank=True, null=True, help_text="الشروط والأحكام بالعربية - بند في كل سطر")
     qr_code = models.ImageField(upload_to="cards/qr/", blank=True, null=True)
     category = models.ForeignKey(CategoryCard, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards')
     showroom = models.ForeignKey(Showroom, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards', help_text="Leave blank for an individual card")

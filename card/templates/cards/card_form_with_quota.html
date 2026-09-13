@@ -53,6 +53,18 @@
                                     {{ form.chassis_number }}
                                 </div>
 
+
+                                <div class="mb-3">
+                                    <label for="{{ form.terms_en.id_for_label }}" class="form-label fw-semibold">Terms &amp; Conditions (English)</label>
+                                    {{ form.terms_en }}
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ form.terms_ar.id_for_label }}" class="form-label fw-semibold">الشروط والأحكام (عربي)</label>
+                                    {{ form.terms_ar }}
+                                    <div class="form-text text-muted small">One condition per line. A language is printed on the back of the card only when it has text — fill in one or both.</div>
+                                </div>
+
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label for="{{ form.end_at.id_for_label }}" class="form-label fw-semibold">Card Expiration Date</label>

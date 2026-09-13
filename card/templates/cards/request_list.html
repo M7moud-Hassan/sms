@@ -168,12 +168,12 @@
             currentMap = null;
         }
         currentMap = L.map('locationMap').setView([custLat, custLng], 13);
-        // OSM's own tile.openstreetmap.org now blocks most direct/embedded referers (403 "Access blocked").
-        // CARTO's basemap tiles are free to embed directly and don't enforce a referer allowlist.
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        // OSM's own tile.openstreetmap.org blocks most direct/embedded referers (403 "Access blocked"),
+        // and CARTO's basemaps now answer with an "API KEY REQUIRED" watermark. Esri's World Street Map
+        // still serves plain tiles without a key.
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
-            subdomains: 'abcd',
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+            attribution: 'Tiles &copy; Esri'
         }).addTo(currentMap);
 
         L.marker([custLat, custLng]).addTo(currentMap)

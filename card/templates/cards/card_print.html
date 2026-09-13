@@ -99,6 +99,60 @@
             white-space: nowrap;
         }
 
+        /* Terms area of the back artwork: starts under the red rule and stops above the
+           bottom edge, inside the same 103.3pt column the rule spans. Each language block
+           only exists when that language has text, so a single-language card fills the
+           whole area instead of leaving an empty heading behind. */
+        .terms {
+            position: absolute;
+            left: 16pt;
+            top: 55pt;
+            width: 103.3pt;
+            height: 81pt;
+            overflow: hidden;
+            font-size: 5.4pt;
+            line-height: 1.35;
+            text-align: left;
+        }
+        .terms-block + .terms-block { margin-top: 5pt; }
+        .terms-title {
+            font-size: 8pt;
+            font-weight: 700;
+            margin-bottom: 2.5pt;
+        }
+        .terms ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .terms li {
+            position: relative;
+            padding-left: 6pt;
+            margin-bottom: 1.5pt;
+        }
+        .terms li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.45em;
+            width: 2.62pt;
+            height: 2.62pt;
+            border-radius: 50%;
+            background: #ffffff;
+        }
+        .terms-ar {
+            direction: rtl;
+            text-align: right;
+        }
+        .terms-ar li {
+            padding-left: 0;
+            padding-right: 6pt;
+        }
+        .terms-ar li::before {
+            left: auto;
+            right: 0;
+        }
+
         /* Sits exactly on the light placeholder square of the back artwork. */
         .qr {
             position: absolute;
@@ -163,6 +217,30 @@
         <div class="side">
             <div class="side-label">Back — الوجه الخلفي</div>
             <div class="card card-back">
+                {% if card.terms_en or card.terms_ar %}
+                    <div class="terms">
+                        {% if card.terms_en %}
+                            <div class="terms-block">
+                                <div class="terms-title">Terms &amp; Conditions</div>
+                                <ul>
+                                    {% for line in card.terms_en.splitlines %}
+                                        {% if line.strip %}<li>{{ line }}</li>{% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                        {% if card.terms_ar %}
+                            <div class="terms-block terms-ar">
+                                <div class="terms-title">الشروط والأحكام</div>
+                                <ul>
+                                    {% for line in card.terms_ar.splitlines %}
+                                        {% if line.strip %}<li>{{ line }}</li>{% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
                 {% if card.qr_code %}
                     <div class="qr"><img src="{{ card.qr_code.url }}" alt="QR"></div>
                 {% endif %}
@@ -183,11 +261,27 @@
             });
         }
 
+        // Long or numerous conditions would overflow the artwork's terms column, so step
+        // the whole block down until both languages fit inside it.
+        function fitTerms() {
+            const box = document.querySelector('.terms');
+            if (!box) return;
+            let size = 5.4;
+            while (box.scrollHeight > box.clientHeight && size > 3.4) {
+                size -= 0.15;
+                box.style.fontSize = size.toFixed(2) + 'pt';
+                box.querySelectorAll('.terms-title').forEach(function(t) {
+                    t.style.fontSize = (size * 1.48).toFixed(2) + 'pt';
+                });
+            }
+        }
+
         // Wait for the artwork and fonts so the print preview is never missing them.
         window.addEventListener('load', function() {
             const ready = document.fonts ? document.fonts.ready : Promise.resolve();
             ready.then(function() {
                 fitValues();
+                fitTerms();
                 window.print();
             });
         });

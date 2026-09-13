@@ -36,7 +36,8 @@ class CustomerForm(forms.ModelForm):
 class CardForm(forms.ModelForm):
     class Meta:
         model = Card
-        fields = ['customer', 'category', 'showroom', 'vehicle_number', 'chassis_number', 'type_car', 'color_car', 'end_at', 'is_active']
+        fields = ['customer', 'category', 'showroom', 'vehicle_number', 'chassis_number', 'type_car', 'color_car',
+                  'end_at', 'is_active', 'terms_en', 'terms_ar']
         widgets = {
             'customer': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select', 'data-category-id': ''}),
@@ -55,6 +56,14 @@ class CardForm(forms.ModelForm):
             'color_car': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. White'}),
             'end_at': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'terms_en': forms.Textarea(attrs={
+                'class': 'form-control', 'rows': 4,
+                'placeholder': 'One condition per line, e.g.\nValid inside Jordan only\nNon-transferable',
+            }),
+            'terms_ar': forms.Textarea(attrs={
+                'class': 'form-control', 'rows': 4, 'dir': 'rtl',
+                'placeholder': 'بند في كل سطر، مثال:\nالخدمة داخل الأردن فقط\nالبطاقة غير قابلة للتحويل',
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -68,6 +77,10 @@ class CardForm(forms.ModelForm):
         self.fields['is_active'].label = "Active card"
         self.fields['chassis_number'].validators.append(validate_vin)
         self.fields['chassis_number'].required = False
+        self.fields['terms_en'].required = False
+        self.fields['terms_ar'].required = False
+        self.fields['terms_en'].label = "Terms & Conditions (English)"
+        self.fields['terms_ar'].label = "الشروط والأحكام (عربي)"
 
 class ShowroomForm(forms.ModelForm):
     class Meta:
