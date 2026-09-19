@@ -124,7 +124,7 @@
                 </a>
                 <div class="dropdown-menu dropdown-menu-right">
                     {% if user.is_staff %}
-                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ vehicle.id }}" data-vehicle_number="{{ vehicle.vehicle_number }}" data-type="{{ vehicle.type }}" data-date="{{ vehicle.date }}" data-status="{{ vehicle.status }}" data-oil="{{ vehicle.default_oil_diff }}" data-fuel="{{ vehicle.default_fuel_filter_diff }}" data-air="{{ vehicle.default_air_filter_diff }}" data-notes="{{ vehicle.notes }}">Edit Data</a>
+                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ vehicle.id }}" data-vehicle_number="{{ vehicle.vehicle_number }}" data-type="{{ vehicle.type }}" data-date="{{ vehicle.date }}" data-status="{{ vehicle.status }}" data-oil="{{ vehicle.default_oil_diff }}" data-fuel="{{ vehicle.default_fuel_filter_diff }}" data-air="{{ vehicle.default_air_filter_diff }}" data-notes="{{ vehicle.notes }}" data-terminal="{{ vehicle.jotrack_terminal|default:'' }}">Edit Data</a>
                     <div class="dropdown-divider"></div>
                     {% endif %}
                     <a class="dropdown-item" data-toggle="modal" data-target="#attachmentsModal" data-id="{{ vehicle.id }}">View Attachments</a>
@@ -258,6 +258,10 @@
                         </div>
                         </div>
                         <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="jotrack_terminal">JoTrack Terminal ID (IMEI)</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="jotrack_terminal" name="jotrack_terminal" placeholder="e.g. 864893030123456">
+                        </div>
+                        <div class="form-group">
                             <label style="color: darkblue; font-weight: bold;" for="notes">Notes</label>
                             <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="notes" name="notes">
                         </div>
@@ -331,6 +335,10 @@
                             <input style="text-align: center; background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="number" class="form-control" id="edit-air" name="air" required>
                             </div>
                         </div>
+                        </div>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-terminal">JoTrack Terminal ID (IMEI)</label>
+                            <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" id="edit-terminal" name="jotrack_terminal">
                         </div>
                         <div class="form-group">
                             <label style="color: darkblue; font-weight: bold;" for="edit-notes">Notes</label>
@@ -481,6 +489,7 @@
     var oil = $(this).data('oil');
     var air = $(this).data('air');
     var notes = $(this).data('notes');
+    var terminal = $(this).data('terminal');
     $('#edit-id').val(id);
     $('#edit-number').val(number);
     $('#edit-type').val(type);
@@ -496,8 +505,8 @@
     $('#edit-oil').val(oil);
     $('#edit-air').val(air);
     $('#edit-notes').val(notes);
-    var action = $('#editForm').attr('action').replace('0', id);
-    $('#editForm').attr('action', action);
+    $('#edit-terminal').val(terminal ? String(terminal) : '');
+    $('#editForm').attr('action', '{% url "edit_vehicle" 0 %}'.replace('/0/', '/' + id + '/'));
 });
 
 $('#viewImageModal').on('show.bs.modal', function (event) {
@@ -577,7 +586,8 @@ $('#viewImageModal').on('show.bs.modal', function (event) {
                 // THIS is what stops the endless "Loading…"
                 var msg;
                 if (textStatus === 'timeout') msg = 'timed out';
-                else if (xhr.status === 404) msg = 'no terminal id set / no data (HTTP 404)';
+                else if (xhr.status === 404) msg = (xhr.responseJSON && xhr.responseJSON.error) || 'HTTP 404';
+                else if (xhr.status === 502) msg = (xhr.responseJSON && xhr.responseJSON.error) || 'JoTrack unavailable';
                 else if (xhr.status) msg = 'HTTP ' + xhr.status;
                 else msg = 'network error';
                 $('#track-info').text('⚠ Could not load location — ' + msg + '.');

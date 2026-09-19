@@ -19,13 +19,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY")
-
+#SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = 'django-insecure-+_1=s5jdd*n(q7$k7u!0&r8u!_f!8vnwj+^^bl_-2c4a9zek8p'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = []
 
+JOTRACK_BASE_URL = "https://jotrackv2.sama.jo"
+JOTRACK_LOGIN_PATH = "/en-us/Login"
+JOTRACK_BASE_URL  = "https://jotrackv2.sama.jo"
+JOTRACK_USERNAME  = "newvision2024"
+JOTRACK_PASSWORD  = "Amro@495990"
+# Only fill these if auto-detection doesn't work (see step 3):
+JOTRACK_LOGIN_POST_PATH = ""
+JOTRACK_USER_FIELD = ""
+JOTRACK_PASS_FIELD = ""
+JOTRACK_CACHE_SECONDS = 15
 
 # Application definition
 

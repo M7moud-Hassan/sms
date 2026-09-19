@@ -648,12 +648,12 @@ def vehicle_track(request, id):
         d = JoTrackClient.get_last_location(key)
     except JoTrackError as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=502)
-    except Exception:
-        return JsonResponse({"ok": False, "error": "JoTrack unavailable"}, status=502)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"JoTrack unavailable: {e}"}, status=502)
 
     if not d:
         return JsonResponse({"ok": False,
-                             "error": "No live data for this vehicle."}, status=404)
+                             "error": f"JoTrack returned no location for terminal {key}."}, status=404)
     return JsonResponse({
         "ok": True,
         "number": vehicle.vehicle_number,
@@ -707,15 +707,16 @@ def add_vehicle(request):
         fuel = request.POST.get('fuel')
         air = request.POST.get('air')
         notes = request.POST.get('notes')
+        jotrack_terminal = (request.POST.get('jotrack_terminal') or '').strip() or None
         system_user = request.user.username
         vehicle_image = request.FILES.get('vehicle_image')
         if vehicle_image:
             fs = FileSystemStorage()
             vehicle_image_name = fs.save(vehicle_image.name, vehicle_image)
             # Save to the database
-            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user, image=vehicle_image_name)
+            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user, image=vehicle_image_name, jotrack_terminal=jotrack_terminal)
         else:
-            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user)
+            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user, jotrack_terminal=jotrack_terminal)
     return redirect('vehicles')
 
 @login_required
@@ -730,6 +731,7 @@ def edit_vehicle(request, id):
         vehicle.default_fuel_filter_diff = request.POST.get('fuel')
         vehicle.default_air_filter_diff = request.POST.get('air')
         vehicle.notes = request.POST.get('notes')
+        vehicle.jotrack_terminal = (request.POST.get('jotrack_terminal') or '').strip() or None
         vehicle_image = request.FILES.get('vehicle_image')
         if vehicle_image:
             fs = FileSystemStorage()
