@@ -20,6 +20,7 @@ urlpatterns = [
     path('filter/<int:id>/', views.filter_invoices, name='cfilter_invoices'),
     path('export_combined/<int:id>/', views.export_combined_invoice, name='export_combined_invoice'),
     path('activities/<int:id>/', views.customer_activities, name='customer_activities'),
+    path('export_vehicles/<int:id>/', views.export_customer_vehicles, name='export_customer_vehicles'),
 ]
 
 

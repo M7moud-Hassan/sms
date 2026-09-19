@@ -589,3 +589,21 @@ if __name__ == "__main__":
             b = io.BytesIO(); fn(b); z.writestr(name, b.getvalue())
     open("/tmp/customer_pack.zip", "wb").write(out.getvalue())
     print("built zip")
+
+def build_customer_vehicles_pdf(buf, customer_name, date_from, date_to, vehicles):
+    """Customer Vehicles table (with transport counts) — matches the details page."""
+    for i, v in enumerate(vehicles, 1):
+        v["_i"] = str(i)
+        v["_transports"] = str(v.get("transports", 0))
+    columns = [
+        ("عدد النقلات", "_transports", 2.4, "C", True),
+        ("اللون", "car_color", 2.4, "C", True),
+        ("الماركة", "car_mark", 2.8, "C", True),
+        ("رقم اللوحة / الشاسيه", "car_num", 3.6, "C", True),
+        ("النوع", "car_type", 3.0, "C", True),
+        ("#", "_i", 1.0, "C", False),
+    ]
+    total_transports = sum(int(v.get("transports", 0) or 0) for v in vehicles)
+    totals = [str(total_transports), "", "", "", f"العدد: {len(vehicles)}", ""]
+    _build_table_report(buf, f"مركبات العميل / {customer_name}",
+                        date_from, date_to, columns, vehicles, "#0d6efd", totals=totals)

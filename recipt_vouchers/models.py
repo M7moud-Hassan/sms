@@ -25,7 +25,7 @@ class Vouchers(models.Model):
     driver_name = models.CharField(blank=True, null=True, max_length=50)
     invoice = models.ForeignKey(Invoices, on_delete=models.CASCADE, null=True, blank=True)
     def __str__(self):
-        return str(self.car_num)
+        return str(self.id)
 
 class Attachments(models.Model):
     voucher = models.ForeignKey(Vouchers, on_delete=models.CASCADE, null=True)

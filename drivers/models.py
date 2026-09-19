@@ -4,7 +4,8 @@ from django.dispatch import receiver
 import json
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from datetime import datetime
+from datetime import datetime, time
+from decimal import Decimal
 from customers.models import Customers, CostCenter
 
 # Statuses that make a driver unavailable for job assignment
@@ -142,4 +143,30 @@ class SMission(models.Model):
     created_at = models.DateTimeField(default=datetime.now)
     def __str__(self):
         return str(self.mmission.id)
+
+class OvertimeSettings(models.Model):
+    """Single-row settings table (always pk=1)."""
+    work_start = models.TimeField(default=time(8, 0))
+    work_end = models.TimeField(default=time(16, 0))
+    count_before = models.BooleanField(default=False)
+    before_multiplier = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('1.25'))
+    count_after = models.BooleanField(default=True)
+    after_multiplier = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('1.25'))
+    off_days = models.CharField(blank=True, default='', max_length=20)   # weekday numbers, Monday=0 ... Friday=4, Saturday=5
+    off_day_multiplier = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('1.50'))
+    grace_minutes = models.PositiveIntegerField(default=0)
+    updated_by = models.CharField(blank=True, null=True, max_length=50)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return "Overtime settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 

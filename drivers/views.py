@@ -22,12 +22,94 @@ from django.contrib.auth.models import User
 from django.contrib import messages
 from datetime import datetime, timedelta
 from collections import OrderedDict
+import io
+from decimal import Decimal, InvalidOperation
 from .forms import SearchForm
-from .models import Drivers, Treasury, MMission, SMission, PMission, UNAVAILABLE_STATUSES
+from .models import Drivers, Treasury, MMission, SMission, PMission, UNAVAILABLE_STATUSES, OvertimeSettings
+from .overtime import build_overtime_report, settings_to_dict, parse_off_days, off_day_names, WEEKDAY_CHOICES
+from .overtime_xlsx import build_overtime_xlsx
 from customers.models import Customers
 from recipt_vouchers.models import Vouchers
 from invoices.models import Invoices, Items
 from invoices.helpers import n2w, update_invoice
+
+def _find_open_car_conflicts(car_num, exclude_mmission_id=None, target_mmission_id=None):
+    """
+    Conflicts for a car that is still 'open' (would block a new assignment):
+      - an SMission whose receipt is 'Assigned' or 'Received' (NOT 'Delivered' or 'Invoiced')
+      - a Voucher that has NOT been delivered yet (recipient_to_name is NULL)
+        This includes:
+        - Pending vouchers (no receipt_from_time, no receipt_to_time)
+        - Received vouchers (has receipt_from_time, no receipt_to_time)
+    Excludes the car's own current mission and the target mission.
+    """
+    amman_tz = pytz.timezone('Asia/Amman')
+    conflicts = []
+    ignore_ids = {i for i in (exclude_mmission_id, target_mmission_id) if i}
+    seen_missions = set()
+
+    # Only open SMissions: 'Assigned' or 'Received' - NOT 'Delivered' or 'Invoiced'
+    OPEN_RECEIPT_STATUSES = ['Assigned', 'Received']
+    
+    for sm in (SMission.objects
+               .filter(car_num=car_num, receipt__in=OPEN_RECEIPT_STATUSES)
+               .select_related('mmission', 'mmission__driver', 'mmission__customer')
+               .order_by('-id')):
+        m = sm.mmission
+        if not m or m.id in ignore_ids or m.id in seen_missions:
+            continue
+        seen_missions.add(m.id)
+        # a Job Box conflict is deletable only while still "Assigned" (not yet received)
+        sm_deletable = (sm.receipt == "Assigned")
+        conflicts.append({
+            'source': 'mission',
+            'status': sm.receipt or 'Assigned',
+            'driver': (m.driver.name if m.driver else '—'),
+            'customer': (m.customer.name if m.customer else '—'),
+            'date': (m.date.strftime('%Y-%m-%d') if m.date else '—'),
+            'from_location': (m.from_location or '—'),
+            'to_location': (m.to_location or '—'),
+            'voucher_id': None,
+            'smission_id': sm.id,
+            'deletable': sm_deletable,
+        })
+
+    # Only vouchers that have NOT been delivered yet
+    # Using the same logic as your radio button filter for "Received" (option1)
+    # recipient_to_name__isnull=True means the vehicle hasn't been delivered
+    for v in (Vouchers.objects
+              .filter(
+                  car_num=car_num, 
+                  recipient_to_name__isnull=True  # <-- KEY: not delivered yet
+              )
+              .select_related('car_owner')
+              .order_by('-id')):
+        
+        # Determine the status based on receipt_from_time
+        if v.receipt_from_time:
+            status = 'Received (in transit)'
+            date_str = localtime(v.receipt_from_time, amman_tz).strftime('%Y-%m-%d %I:%M %p')
+        else:
+            status = 'Open (pending)'
+            date_str = '—'
+        
+        # deletable only when this handover voucher was never actually received
+        # (no receipt-from data) — a stray/empty record safe to remove
+        deletable = (v.receipt_from_time is None) and (v.invoice_id is None)
+        conflicts.append({
+            'source': 'voucher',
+            'status': 'Delivered' if v.receipt_to_time else ('Received' if v.receipt_from_time else 'Open'),
+            'driver': (v.driver_name or '—'),
+            'customer': (v.car_owner.name if v.car_owner else '—'),
+            'date': date_str,
+            'from_location': (v.receipt_from_location or '—'),
+            'to_location': (v.receipt_to_location or '—'),
+            'voucher_id': v.id,
+            'smission_id': None,
+            'deletable': deletable,
+        })
+
+    return conflicts
 
 # Create your views here.
 def index(request):
@@ -319,63 +401,38 @@ def export_treasury(request, id, date_from, date_to):
     # ---- summary income = invoiced total (consistent with the balance page) ----
     total_income = total_invoiced
 
-    # ---- build the four ReportLab PDFs into one zip ----
-    import io
-    from . import driver_reports as dr
+    from . import driver_reports as dr, driver_reports_xlsx as dx
+    from .report_xlsx import deliver          # adjust import path to where report_xlsx lives
 
-    # Read selected reports from query string, e.g. ?reports=account_statement,trips
-    selected = request.GET.get('reports', '')
-    selected_keys = [s.strip() for s in selected.split(',') if s.strip()]
+    fmt = request.GET.get('format', 'pdf')
+    selected_keys = [s.strip() for s in request.GET.get('reports', '').split(',') if s.strip()]
 
     available = {
-        "account_statement": (
-            "account_statement.pdf",
+        "account_statement": ("account_statement",
             lambda b: dr.build_account_statement_pdf(b, driver_name, date_from, date_to,
+                                                     entries, total_invoiced, total_treasury, required_amount),
+            lambda b: dx.build_account_statement_xlsx(b, driver_name, date_from, date_to,
                                                       entries, total_invoiced, total_treasury, required_amount)),
-        "trips": (
-            "trips.pdf",
-            lambda b: dr.build_trips_pdf(b, driver_name, date_from, date_to, trips, total_trip_cost)),
-        "vehicles": (
-            "vehicles.pdf",
-            lambda b: dr.build_vehicles_pdf(b, driver_name, date_from, date_to, vehicles)),
-        "summary": (
-            "summary.pdf",
+        "trips": ("trips",
+            lambda b: dr.build_trips_pdf(b, driver_name, date_from, date_to, trips, total_trip_cost),
+            lambda b: dx.build_trips_xlsx(b, driver_name, date_from, date_to, trips, total_trip_cost)),
+        "vehicles": ("vehicles",
+            lambda b: dr.build_vehicles_pdf(b, driver_name, date_from, date_to, vehicles),
+            lambda b: dx.build_vehicles_xlsx(b, driver_name, date_from, date_to, vehicles)),
+        "summary": ("summary",
             lambda b: dr.build_summary_pdf(b, driver_name, date_from, date_to,
-                                           total_income, vehicles_count, trips_count)),
+                                           total_income, vehicles_count, trips_count),
+            lambda b: dx.build_summary_xlsx(b, driver_name, date_from, date_to,
+                                            total_income, vehicles_count, trips_count)),
     }
 
-    # default: all reports (backwards compatibility)
     if not selected_keys:
         selected_keys = list(available.keys())
-
     chosen = [available[k] for k in selected_keys if k in available]
     if not chosen:
         raise Http404("No valid report selected")
 
-    if len(chosen) == 1:
-        # single file -> direct PDF download
-        name, build = chosen[0]
-        buf = io.BytesIO()
-        build(buf)
-        buf.seek(0)
-        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{name}"'
-        response.set_cookie('export_download_done', 'true', max_age=60)
-        return response
-
-    # multiple files -> zip
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for name, build in chosen:
-            b = io.BytesIO()
-            build(b)
-            zf.writestr(name, b.getvalue())
-
-    zip_buf.seek(0)
-    response = HttpResponse(zip_buf.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="Driver_Report_{driver_name}.zip"'
-    response.set_cookie('export_download_done', 'true', max_age=60)
-    return response
+    return deliver(request, chosen, fmt, zip_basename=f"Driver_Report_{driver_name}")
 
 def _short_loc(text, max_len=40):
     """Pick a concise label from a long comma-separated address:
@@ -581,14 +638,16 @@ def delete_mitem(request, id):
 
 @login_required
 def pmissions_index(request):
+    week_ago = datetime.today() - timedelta(days=7)
     pmissions = PMission.objects.filter(
-        Q(date__gte=datetime.today()) & (
-            Q(mmission__isnull=True) |
-            (Q(mmission__isnull=False) & Q(mmission__count__gt=0) & Q(mmission__accept__isnull=True))
-        )
+        # unassigned missions: show from up to one week ago through the future
+        (Q(mmission__isnull=True) & Q(date__gte=week_ago)) |
+        # assigned-but-still-pending: keep the today-and-future gate
+        (Q(date__gte=datetime.today())
+         & Q(mmission__isnull=False) & Q(mmission__count__gt=0) & Q(mmission__accept__isnull=True))
     ).order_by('customer__name', 'date', 'id')
 
-    mmissions = MMission.objects.filter(date__gte=datetime.today())
+    mmissions = MMission.objects.filter(date__gte=week_ago)
     amman_tz = pytz.timezone('Asia/Amman')
     adjusted_pmissions = []
     for pmission in pmissions:
@@ -599,8 +658,16 @@ def pmissions_index(request):
             pmission.adjusted_created_at += timedelta(hours=time_diff)
         # Fetch MMissions matching this PMission, excluding any whose driver is
         # unavailable ON THIS PMission's date (not "today").
+        # Candidate missions: same customer, still unaccepted, dated from the
+        # pmission's date up to (and including) today — so a mission created today
+        # is assignable to a pmission navigated on an earlier date.
+        today = datetime.today().date()
+        pdate = pmission.date
+        low = min(pdate, today)      # earliest of the two
+        high = max(pdate, today)     # latest of the two
         matching_mmissions = MMission.objects.filter(
-            Q(date=pmission.date) & Q(customer__id=pmission.customer.id) & Q(accept__isnull=True)
+            Q(customer__id=pmission.customer.id) & Q(accept__isnull=True)
+            & Q(date__range=(low, high))
         ).exclude(
             Q(driver__status__in=UNAVAILABLE_STATUSES)
             & (Q(driver__status_from__isnull=True) | Q(driver__status_from__lte=pmission.date))
@@ -662,6 +729,23 @@ def update_pmission_mmission(request):
             pmission = PMission.objects.select_for_update().get(id=pmission_id)
             car_num = (pmission.car_num or '').strip()
             user = request.user.username
+
+            # GUARD: block assigning this car to a NEW mission if the SAME car number
+            # is still open elsewhere (open SMission OR uninvoiced voucher).
+            if mmission_id and car_num:
+                blockers = _find_open_car_conflicts(
+                    car_num,
+                    exclude_mmission_id=pmission.mmission_id,
+                    target_mmission_id=int(mmission_id) if str(mmission_id).isdigit() else None,
+                )
+                if blockers:
+                    return JsonResponse({
+                        'status': 'blocked',
+                        'message': 'This vehicle is still open on another job and has not '
+                                   'been converted to an invoice yet.',
+                        'car_num': car_num,
+                        'conflicts': blockers,
+                    }, status=409)
 
             # 1) Detach from the OLD mission: remove THIS pmission's SMission,
             #    scoped to the mission it is CURRENTLY linked to (not any same-day
@@ -870,3 +954,177 @@ def change_pmission_customer(request, id):
             pmission.save()
             return JsonResponse({'success': True, 'customer_id': new_customer.id})
     return JsonResponse({'success': False}, status=400)
+
+@login_required
+def delete_voucher(request, id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+    try:
+        v = Vouchers.objects.get(id=id)
+    except Vouchers.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Voucher not found'}, status=404)
+
+    # Safety: only delete a still-open voucher that has NO receipt-from data.
+    if v.invoice_id is not None:
+        return JsonResponse({'status': 'error', 'message': 'This voucher is already invoiced.'}, status=400)
+    if v.receipt_from_time is not None:
+        return JsonResponse({'status': 'error', 'message': 'This voucher already has receipt data.'}, status=400)
+
+    v.delete()
+    return JsonResponse({'status': 'success'})
+
+@login_required
+def delete_smission(request, id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+    from django.db import transaction
+    try:
+        with transaction.atomic():
+            sm = SMission.objects.select_for_update().get(id=id)
+
+            # Safety: only remove a still-"Assigned" row (no receipt progress).
+            if sm.receipt != "Assigned":
+                return JsonResponse(
+                    {'status': 'error',
+                     'message': 'This vehicle has already been received and cannot be removed.'},
+                    status=400)
+
+            mission = sm.mmission
+            sm.delete()
+
+            # recompute the mission's assigned-vehicle count
+            if mission:
+                mission.count = SMission.objects.filter(
+                    mmission=mission, receipt="Assigned"
+                ).count()
+                mission.save()
+
+        return JsonResponse({'status': 'success'})
+    except SMission.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Record not found'}, status=404)
+
+# ============================================================================
+# Drivers overtime (report + settings + Excel export)
+# ============================================================================
+def _parse_hhmm(value):
+    for fmt in ('%H:%M', '%H:%M:%S'):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except (TypeError, ValueError):
+            continue
+    raise ValueError("invalid time")
+
+
+def _overtime_filters(request):
+    """Reads date range + driver selection from GET (shared by page and export)."""
+    today = datetime.now(pytz.timezone('Asia/Amman')).date()
+
+    def _parse(value, default):
+        try:
+            return datetime.strptime(value, '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            return default
+
+    date_from = _parse(request.GET.get('date_from'), today.replace(day=1))
+    date_to = _parse(request.GET.get('date_to'), today)
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    scope = request.GET.get('scope', 'all')
+    selected_ids = [int(x) for x in request.GET.getlist('drivers') if x.isdigit()]
+    driver_names = None
+    if scope == 'selected' and selected_ids:
+        driver_names = list(Drivers.objects.filter(id__in=selected_ids).values_list('name', flat=True))
+    else:
+        scope, selected_ids = 'all', []
+    return date_from, date_to, scope, selected_ids, driver_names
+
+
+@login_required
+def drivers_overtime(request):
+    if 'jobbox' in request.user.username:
+        return redirect('pmissions_index')
+
+    ot_settings = OvertimeSettings.get_solo()
+    settings_error = None
+    tab = request.GET.get('tab', 'report')
+
+    # ---- save settings (staff only) ----
+    if request.method == "POST" and 'save_settings' in request.POST:
+        tab = 'settings'
+        if not request.user.is_staff:
+            settings_error = "Only staff users can change the overtime settings."
+        else:
+            try:
+                work_start = _parse_hhmm(request.POST.get('work_start'))
+                work_end = _parse_hhmm(request.POST.get('work_end'))
+                before_multiplier = Decimal(request.POST.get('before_multiplier') or '1')
+                after_multiplier = Decimal(request.POST.get('after_multiplier') or '1')
+                off_day_multiplier = Decimal(request.POST.get('off_day_multiplier') or '1')
+                grace_minutes = int(request.POST.get('grace_minutes') or 0)
+                off_days = parse_off_days(request.POST.getlist('off_days'))
+            except (ValueError, InvalidOperation):
+                settings_error = "Please enter valid times and numbers."
+            else:
+                if work_end <= work_start:
+                    settings_error = "The work day end time must be after the begin time."
+                elif min(before_multiplier, after_multiplier, off_day_multiplier) < 0 or grace_minutes < 0:
+                    settings_error = "Multipliers and grace minutes cannot be negative."
+                else:
+                    ot_settings.work_start = work_start
+                    ot_settings.work_end = work_end
+                    ot_settings.count_before = 'count_before' in request.POST
+                    ot_settings.before_multiplier = before_multiplier
+                    ot_settings.count_after = 'count_after' in request.POST
+                    ot_settings.after_multiplier = after_multiplier
+                    ot_settings.off_days = ",".join(str(d) for d in sorted(off_days))
+                    ot_settings.off_day_multiplier = off_day_multiplier
+                    ot_settings.grace_minutes = grace_minutes
+                    ot_settings.updated_by = request.user.username
+                    ot_settings.save()
+                    return redirect(f"{reverse('drivers_overtime')}?tab=settings&saved=1")
+
+    date_from, date_to, scope, selected_ids, driver_names = _overtime_filters(request)
+    report = None
+    if 'search' in request.GET:
+        report = build_overtime_report(ot_settings, date_from, date_to, driver_names)
+
+    context = {
+        'active_tab': 'drivers',
+        'tab': tab,
+        'saved': request.GET.get('saved') == '1',
+        'settings_error': settings_error,
+        'ot_settings': ot_settings,
+        'weekday_choices': WEEKDAY_CHOICES,
+        'off_days_set': parse_off_days(ot_settings.off_days),
+        'off_day_names': off_day_names(parse_off_days(ot_settings.off_days)),
+        'all_drivers': Drivers.objects.order_by('name'),
+        'date_from': date_from,
+        'date_to': date_to,
+        'scope': scope,
+        'selected_ids': selected_ids,
+        'report': report,
+    }
+    return render(request, "drivers/overtime.html", context)
+
+@login_required
+def export_overtime(request):
+    ot_settings = OvertimeSettings.get_solo()
+    date_from, date_to, scope, selected_ids, driver_names = _overtime_filters(request)
+    report = build_overtime_report(ot_settings, date_from, date_to, driver_names)
+
+    if not driver_names:
+        driver_label = "كل السائقين"
+    elif len(driver_names) <= 4:
+        driver_label = "، ".join(driver_names)
+    else:
+        driver_label = f"{len(driver_names)} سائقين"
+
+    buf = io.BytesIO()
+    build_overtime_xlsx(buf, report, settings_to_dict(ot_settings), date_from, date_to, driver_label)
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="Drivers_Overtime_{date_from}_{date_to}.xlsx"'
+    return response

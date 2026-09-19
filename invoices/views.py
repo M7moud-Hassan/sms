@@ -602,10 +602,98 @@ def send_invoice(request, number):
     # Load the existing workbook
     wb = load_workbook(source_excel_path)
     ws = wb.active
+
+    # --- Handle invoices with more line items than the template's fixed area ---
+    from openpyxl.utils import range_boundaries
+    from openpyxl.utils.cell import coordinate_from_string
+
+    MAX_ITEM_ROWS = 12      # template item slots: rows 19–30
+    FOOTER_START  = 31      # first row after the item area (totals row)
+
+    extra = max(0, len(items) - MAX_ITEM_ROWS)
+
+    def fcell(ref):
+        """Shift a cell reference down by `extra` rows if it sits in/after the footer."""
+        col, row = coordinate_from_string(ref)
+        return f"{col}{row + extra if row >= FOOTER_START else row}"
+
+    if extra:
+        from copy import copy
+        TEMPLATE_ROW = 30  # reference item row for styling new rows
+
+        # 1) remember footer merges AND footer row heights before shifting
+        footer_merges  = [str(r) for r in list(ws.merged_cells.ranges)
+                          if r.min_row >= FOOTER_START]
+        footer_heights = {r: ws.row_dimensions[r].height
+                          for r in range(FOOTER_START, ws.max_row + 1)}
+
+        # 2) unmerge footer, insert blank rows, re-merge footer at shifted position
+        for r in footer_merges:
+            ws.unmerge_cells(r)
+        ws.insert_rows(FOOTER_START, amount=extra)
+        for r in footer_merges:
+            c1, r1, c2, r2 = range_boundaries(r)
+            ws.merge_cells(start_row=r1 + extra, start_column=c1,
+                           end_row=r2 + extra, end_column=c2)
+
+        # 3) restore the footer row heights at their new (shifted) positions
+        for r, h in footer_heights.items():
+            if h is not None:
+                ws.row_dimensions[r + extra].height = h
+
+        # 4) style + merge the newly inserted item rows to match row 30
+        for new_row in range(FOOTER_START, FOOTER_START + extra):
+            src_h = ws.row_dimensions[TEMPLATE_ROW].height
+            if src_h is not None:
+                ws.row_dimensions[new_row].height = src_h
+            for col in range(1, 10):          # style BEFORE merging
+                src = ws.cell(row=TEMPLATE_ROW, column=col)
+                dst = ws.cell(row=new_row, column=col)
+                if src.has_style:
+                    dst.font          = copy(src.font)
+                    dst.border        = copy(src.border)
+                    dst.fill          = copy(src.fill)
+                    dst.alignment     = copy(src.alignment)
+                    dst.protection    = copy(src.protection)
+                    dst.number_format = src.number_format
+            ws.merge_cells(start_row=new_row, start_column=4,
+                           end_row=new_row, end_column=7)
+
+        # 4) Style the newly inserted rows to match a template item row
+        from copy import copy
+        TEMPLATE_ROW = 30  # a representative existing item row (19–30)
+
+        for new_row in range(FOOTER_START, FOOTER_START + extra):
+            # row height
+            src_h = ws.row_dimensions[TEMPLATE_ROW].height
+            if src_h is not None:
+                ws.row_dimensions[new_row].height = src_h
+
+            # per-cell style, columns A–I  (do this BEFORE merging)
+            for col in range(1, 10):
+                src = ws.cell(row=TEMPLATE_ROW, column=col)
+                dst = ws.cell(row=new_row, column=col)
+                if src.has_style:
+                    dst.font          = copy(src.font)
+                    dst.border        = copy(src.border)
+                    dst.fill          = copy(src.fill)
+                    dst.alignment     = copy(src.alignment)
+                    dst.protection    = copy(src.protection)
+                    dst.number_format = src.number_format
+
+            # same D:G description merge the other item rows have
+            ws.merge_cells(start_row=new_row, start_column=4,
+                           end_row=new_row, end_column=7)
     # Add voucher signature if exists
     if voucher:
         img = OpenpyxlImage(voucher.receipt_to_signature.path)
-        ws.add_image(img, 'B33')
+        # keep the signature's true aspect ratio, fit it inside a sensible box
+        BOX_W, BOX_H = 170, 85   # pixels — tweak to taste
+        if img.width and img.height:
+            scale = min(BOX_W / img.width, BOX_H / img.height)
+            img.width  = int(img.width  * scale)
+            img.height = int(img.height * scale)
+        ws.add_image(img, fcell('B34'))   # float at the (shifted) signature cell
     # Add QR code to Excel only if we have one
     if qr_temp_path and os.path.exists(qr_temp_path):
         try:
@@ -614,7 +702,7 @@ def send_invoice(request, number):
             ws.add_image(qr_excel_img, 'H5')
             # Add note about duplicate if applicable
             if duplicate_error and use_stored_qr:
-                ws['H36'] = "QR code from previous submission"
+                ws[fcell('H36')] = "QR code from previous submission"
         except Exception as e:
             print(f"Failed to add QR code to Excel: {str(e)}")
     # Fill invoice data
@@ -630,15 +718,25 @@ def send_invoice(request, number):
     ws['G9'] = invoice.date
     ws['B11'] = name
     ws['A13'] = invoice.car
-    ws['B31'] = invoice.samount
-    ws['H32'] = invoice.dinar
-    ws['I32'] = invoice.fils
+    # dynamic height for the VIN list so it isn't clipped
+    from openpyxl.styles import Alignment
+    a13 = ws['A13']
+    a13.alignment = Alignment(wrap_text=True,
+                              horizontal=a13.alignment.horizontal or 'center',
+                              vertical='center')
+    vin_count = len([v for v in (invoice.car or '').replace('،', ',').split(',') if v.strip()])
+    VINS_PER_LINE = 4                     # matches the template's column width
+    lines = max(1, -(-vin_count // VINS_PER_LINE))   # ceil division
+    ws.row_dimensions[13].height = max(40.05, lines * 15 + 6)
+    ws[fcell('B31')] = invoice.samount
+    ws[fcell('H32')] = invoice.dinar
+    ws[fcell('I32')] = invoice.fils
 
     if voucher:
-        ws['E34'] = voucher.recipient_to_name
-    ws['E35'] = sub_customer
-    ws['E36'] = invoice.driver.name if invoice.driver else ""
-    ws['E38'] = invoice.notes if invoice.notes else ""
+        ws[fcell('E34')] = voucher.recipient_to_name
+    ws[fcell('E35')] = sub_customer
+    ws[fcell('E36')] = invoice.driver.name if invoice.driver else ""
+    ws[fcell('E38')] = invoice.notes if invoice.notes else ""
 
     for idx, item in enumerate(items, start=19):
         ws.cell(row=idx, column=1, value=item.udinar)
@@ -648,6 +746,14 @@ def send_invoice(request, number):
         ws.cell(row=idx, column=8, value=item.adinar)
         ws.cell(row=idx, column=9, value=item.afils)
 
+    if extra:
+        # let long invoices flow onto a second page instead of being crammed onto one
+        ws.print_title_rows = '1:18'                 # repeat header block on page 2
+        ws.page_setup.fitToWidth = 1                 # still one page wide
+        ws.page_setup.fitToHeight = 2                # up to two pages tall
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.print_area = f'A1:I{ws.max_row}'          # include the shifted footer
+    
     # Save Excel file
     wb.save(output_excel_path)
 
@@ -745,10 +851,98 @@ def export_invoice(request, number):
     # Load the existing workbook
     wb = load_workbook(source_excel_path)
     ws = wb.active
+
+    # --- Handle invoices with more line items than the template's fixed area ---
+    from openpyxl.utils import range_boundaries
+    from openpyxl.utils.cell import coordinate_from_string
+
+    MAX_ITEM_ROWS = 12      # template item slots: rows 19–30
+    FOOTER_START  = 31      # first row after the item area (totals row)
+
+    extra = max(0, len(items) - MAX_ITEM_ROWS)
+
+    def fcell(ref):
+        """Shift a cell reference down by `extra` rows if it sits in/after the footer."""
+        col, row = coordinate_from_string(ref)
+        return f"{col}{row + extra if row >= FOOTER_START else row}"
+
+    if extra:
+        from copy import copy
+        TEMPLATE_ROW = 30  # reference item row for styling new rows
+
+        # 1) remember footer merges AND footer row heights before shifting
+        footer_merges  = [str(r) for r in list(ws.merged_cells.ranges)
+                          if r.min_row >= FOOTER_START]
+        footer_heights = {r: ws.row_dimensions[r].height
+                          for r in range(FOOTER_START, ws.max_row + 1)}
+
+        # 2) unmerge footer, insert blank rows, re-merge footer at shifted position
+        for r in footer_merges:
+            ws.unmerge_cells(r)
+        ws.insert_rows(FOOTER_START, amount=extra)
+        for r in footer_merges:
+            c1, r1, c2, r2 = range_boundaries(r)
+            ws.merge_cells(start_row=r1 + extra, start_column=c1,
+                           end_row=r2 + extra, end_column=c2)
+
+        # 3) restore the footer row heights at their new (shifted) positions
+        for r, h in footer_heights.items():
+            if h is not None:
+                ws.row_dimensions[r + extra].height = h
+
+        # 4) style + merge the newly inserted item rows to match row 30
+        for new_row in range(FOOTER_START, FOOTER_START + extra):
+            src_h = ws.row_dimensions[TEMPLATE_ROW].height
+            if src_h is not None:
+                ws.row_dimensions[new_row].height = src_h
+            for col in range(1, 10):          # style BEFORE merging
+                src = ws.cell(row=TEMPLATE_ROW, column=col)
+                dst = ws.cell(row=new_row, column=col)
+                if src.has_style:
+                    dst.font          = copy(src.font)
+                    dst.border        = copy(src.border)
+                    dst.fill          = copy(src.fill)
+                    dst.alignment     = copy(src.alignment)
+                    dst.protection    = copy(src.protection)
+                    dst.number_format = src.number_format
+            ws.merge_cells(start_row=new_row, start_column=4,
+                           end_row=new_row, end_column=7)
+
+        # 4) Style the newly inserted rows to match a template item row
+        from copy import copy
+        TEMPLATE_ROW = 30  # a representative existing item row (19–30)
+
+        for new_row in range(FOOTER_START, FOOTER_START + extra):
+            # row height
+            src_h = ws.row_dimensions[TEMPLATE_ROW].height
+            if src_h is not None:
+                ws.row_dimensions[new_row].height = src_h
+
+            # per-cell style, columns A–I  (do this BEFORE merging)
+            for col in range(1, 10):
+                src = ws.cell(row=TEMPLATE_ROW, column=col)
+                dst = ws.cell(row=new_row, column=col)
+                if src.has_style:
+                    dst.font          = copy(src.font)
+                    dst.border        = copy(src.border)
+                    dst.fill          = copy(src.fill)
+                    dst.alignment     = copy(src.alignment)
+                    dst.protection    = copy(src.protection)
+                    dst.number_format = src.number_format
+
+            # same D:G description merge the other item rows have
+            ws.merge_cells(start_row=new_row, start_column=4,
+                           end_row=new_row, end_column=7)
     # Add voucher signature if exists
     if voucher:
         img = OpenpyxlImage(voucher.receipt_to_signature.path)
-        ws.add_image(img, 'B33')
+        # keep the signature's true aspect ratio, fit it inside a sensible box
+        BOX_W, BOX_H = 170, 85   # pixels — tweak to taste
+        if img.width and img.height:
+            scale = min(BOX_W / img.width, BOX_H / img.height)
+            img.width  = int(img.width  * scale)
+            img.height = int(img.height * scale)
+        ws.add_image(img, fcell('B34'))   # float at the (shifted) signature cell
 
     # Add QR code to Excel only if we have one
     if qr_temp_path and os.path.exists(qr_temp_path):
@@ -777,14 +971,25 @@ def export_invoice(request, number):
     ws['G9'] = invoice.date
     ws['B11'] = name
     ws['A13'] = invoice.car
-    ws['B31'] = invoice.samount
-    ws['H32'] = invoice.dinar
-    ws['I32'] = invoice.fils
+    # dynamic height for the VIN list so it isn't clipped
+    from openpyxl.styles import Alignment
+    a13 = ws['A13']
+    a13.alignment = Alignment(wrap_text=True,
+                              horizontal=a13.alignment.horizontal or 'center',
+                              vertical='center')
+    vin_count = len([v for v in (invoice.car or '').replace('،', ',').split(',') if v.strip()])
+    VINS_PER_LINE = 4                     # matches the template's column width
+    lines = max(1, -(-vin_count // VINS_PER_LINE))   # ceil division
+    ws.row_dimensions[13].height = max(40.05, lines * 15 + 6)
+    ws[fcell('B31')] = invoice.samount
+    ws[fcell('H32')] = invoice.dinar
+    ws[fcell('I32')] = invoice.fils
+
     if voucher:
-        ws['E34'] = voucher.recipient_to_name
-    ws['E35'] = sub_customer
-    ws['E36'] = invoice.driver.name if invoice.driver else ""
-    ws['E38'] = invoice.notes if invoice.notes else ""
+        ws[fcell('E34')] = voucher.recipient_to_name
+    ws[fcell('E35')] = sub_customer
+    ws[fcell('E36')] = invoice.driver.name if invoice.driver else ""
+    ws[fcell('E38')] = invoice.notes if invoice.notes else ""
 
     for idx, item in enumerate(items, start=19):
         ws.cell(row=idx, column=1, value=item.udinar)
@@ -794,6 +999,14 @@ def export_invoice(request, number):
         ws.cell(row=idx, column=8, value=item.adinar)
         ws.cell(row=idx, column=9, value=item.afils)
 
+    if extra:
+        # let long invoices flow onto a second page instead of being crammed onto one
+        ws.print_title_rows = '1:18'                 # repeat header block on page 2
+        ws.page_setup.fitToWidth = 1                 # still one page wide
+        ws.page_setup.fitToHeight = 2                # up to two pages tall
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.print_area = f'A1:I{ws.max_row}'          # include the shifted footer
+    
     # Save Excel file
     wb.save(output_excel_path)
 

@@ -216,6 +216,38 @@
     </div>
 </div>
 
+<div class="modal fade" id="carConflictModal" tabindex="-1" role="dialog" aria-labelledby="carConflictTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="carConflictTitle">
+          <i class="fas fa-ban mr-2"></i> Assignment blocked
+        </h5>
+        <button style="border: none;" type="button" class="close bg-danger text-white" data-bs-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="carConflictIntro" class="mb-3"></p>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead class="thead-light">
+              <tr>
+                <th>Source</th><th>Status</th><th>Driver</th><th>Customer</th>
+                <th>Date</th><th>From</th><th>To</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="carConflictRows"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -365,7 +397,7 @@ function updatePmissionMmission(pmissionId, mmissionId, otherNotes) {
         },
         success: function(response) {
             if (response.status === 'success') {
-                var $select = $('select[data-pmission-id="' + pmissionId + '"]');
+                var $select = $('select.assign-mmission[data-pmission-id="' + pmissionId + '"]');
                 var $row = $select.closest('tr');
 
                 if (otherNotes) {
@@ -381,8 +413,55 @@ function updatePmissionMmission(pmissionId, mmissionId, otherNotes) {
                 }
             }
         },
+        error: function(xhr) {
+            if (xhr.status === 409 && xhr.responseJSON && xhr.responseJSON.status === 'blocked') {
+                renderCarConflictModal(xhr.responseJSON);
+                // revert ONLY the mission dropdown to its first option (the "__select__"
+                // placeholder); scope to .assign-mmission so the customer select is untouched
+                var $select = $('select.assign-mmission[data-pmission-id="' + pmissionId + '"]');
+                $select.prop('selectedIndex', 0);   // snap back to the first option
+                $select.closest('tr').removeClass('assigned-row');
+            } else {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                          ? xhr.responseJSON.message : 'Could not assign the mission.';
+                alert(msg);
+            }
+        },
     });
 }
+
+function renderCarConflictModal(data) {
+    document.getElementById('carConflictIntro').textContent =
+        (data.message || 'This vehicle is still open on another job.') +
+        '  (Car: ' + (data.car_num || '') + ')';
+    var tbody = document.getElementById('carConflictRows');
+    tbody.innerHTML = '';
+    (data.conflicts || []).forEach(function(c) {
+        var tr = document.createElement('tr');
+        var actions = '';
+        if (c.deletable && c.source === 'voucher' && c.voucher_id) {
+            actions = '<button type="button" class="btn btn-sm btn-danger delete-voucher-btn" ' +
+                      'data-voucher-id="' + c.voucher_id + '">' +
+                      '<i class="fas fa-trash"></i> Delete</button>';
+        } else if (c.deletable && c.source === 'mission' && c.smission_id) {
+            actions = '<button type="button" class="btn btn-sm btn-danger delete-smission-btn" ' +
+                      'data-smission-id="' + c.smission_id + '">' +
+                      '<i class="fas fa-trash"></i> Delete</button>';
+        }
+        tr.innerHTML =
+            '<td>' + (c.source === 'voucher' ? 'Handover' : 'Job Box') + '</td>' +
+            '<td>' + (c.status || '') + '</td>' +
+            '<td>' + (c.driver || '') + '</td>' +
+            '<td>' + (c.customer || '') + '</td>' +
+            '<td>' + (c.date || '') + '</td>' +
+            '<td>' + (c.from_location || '') + '</td>' +
+            '<td>' + (c.to_location || '') + '</td>' +
+            '<td>' + actions + '</td>';
+        tbody.appendChild(tr);
+    });
+    $('#carConflictModal').modal('show');
+}
+
 $(document).on('click', '.change-customer-button', function () {
     var id = $(this).data('id');
     $('#change-customer-select').val(String($(this).data('customer')));
@@ -404,6 +483,59 @@ $(document).on('change', '.change-customer-select', function () {
         },
         error: function () {
             alert('Failed to change customer');
+        }
+    });
+});
+
+$(document).on('click', '.delete-voucher-btn', function () {
+    var vid = $(this).data('voucher-id');
+    var $row = $(this).closest('tr');
+    if (!confirm('Delete this empty handover voucher?')) return;
+    $.ajax({
+        url: '/drivers/delete_voucher/' + vid + '/',
+        type: 'POST',
+        headers: { 'X-CSRFToken': csrftoken },
+        success: function (res) {
+            if (res.status === 'success') {
+                $row.remove();
+                // if no conflicts remain, close the modal so the user can re-try the assignment
+                if ($('#carConflictRows tr').length === 0) {
+                    $('#carConflictModal').modal('hide');
+                }
+            } else {
+                alert(res.message || 'Could not delete the voucher.');
+            }
+        },
+        error: function (xhr) {
+            var m = (xhr.responseJSON && xhr.responseJSON.message)
+                    ? xhr.responseJSON.message : 'Could not delete the voucher.';
+            alert(m);
+        }
+    });
+});
+
+$(document).on('click', '.delete-smission-btn', function () {
+    var sid = $(this).data('smission-id');
+    var $row = $(this).closest('tr');
+    if (!confirm('Remove this Job Box assignment for the vehicle?')) return;
+    $.ajax({
+        url: '/drivers/delete_smission/' + sid + '/',
+        type: 'POST',
+        headers: { 'X-CSRFToken': csrftoken },
+        success: function (res) {
+            if (res.status === 'success') {
+                $row.remove();
+                if ($('#carConflictRows tr').length === 0) {
+                    $('#carConflictModal').modal('hide');
+                }
+            } else {
+                alert(res.message || 'Could not remove the assignment.');
+            }
+        },
+        error: function (xhr) {
+            var m = (xhr.responseJSON && xhr.responseJSON.message)
+                    ? xhr.responseJSON.message : 'Could not remove the assignment.';
+            alert(m);
         }
     });
 });

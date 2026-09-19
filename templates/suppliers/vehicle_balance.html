@@ -24,6 +24,11 @@
       <label><input type="checkbox" value="fuel" checked> Fuel consumption (km/L)</label>
       <label><input type="checkbox" value="maintenance" checked> Maintenance parts &amp; costs</label>
     </div>
+    <div style="display:flex; gap:18px; align-items:center; margin:6px 0 12px; padding-top:8px; border-top:1px solid #eee;">
+      <span style="font-weight:600;">Format:</span>
+      <label><input type="radio" name="exportFormat" value="pdf" checked> PDF</label>
+      <label><input type="radio" name="exportFormat" value="xlsx"> Excel</label>
+    </div>
     <div style="text-align:right;">
       <button type="button" id="cancelExportBtn" class="btn btn-light">Cancel</button>
       <button type="button" id="confirmExportBtn" class="btn btn-primary">Download</button>
@@ -163,7 +168,8 @@
     document.getElementById('confirmExportBtn').addEventListener('click', function () {
         let selected = Array.from(exportModal.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
         if (selected.length === 0) { alert('Please select at least one report.'); return; }
-        let url = exportBtn.dataset.baseUrl + '?reports=' + selected.join(',');
+        let fmt = (exportModal.querySelector('input[name="exportFormat"]:checked') || {}).value || 'pdf';
+        let url = exportBtn.dataset.baseUrl + '?reports=' + selected.join(',') + '&format=' + fmt;
 
         let btn = this, original = btn.innerHTML;
         btn.disabled = true;

@@ -32,7 +32,10 @@ urlpatterns = [
     path('mark-as-read/<int:mission_id>/', views.mark_as_read, name='mark_as_read'),
     path('mark-as-read-bulk/', views.mark_as_read_bulk, name='mark_as_read_bulk'),
     path('change_pmission_customer/<int:id>/', views.change_pmission_customer, name='change_pmission_customer'),
-
+    path('delete_voucher/<int:id>/', views.delete_voucher, name='delete_voucher'),
+    path('delete_smission/<int:id>/', views.delete_smission, name='delete_smission'),
+    path('overtime/', views.drivers_overtime, name='drivers_overtime'),
+    path('overtime/export/', views.export_overtime, name='export_overtime'),
 ]
 
 

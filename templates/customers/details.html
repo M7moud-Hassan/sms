@@ -116,7 +116,47 @@ background-color: #f7f7fc;
 		</div>
 		<div class="row" style="margin-top: 20px;">
 			<div class="col-xl-8">
-				<div class="card">
+				
+            <div class="card" style="margin-bottom: 55px;">
+            <div class="input-group mb-3" style="padding: 10px 20px 0 20px; align-items:center;">
+            <h5 class="card-title mb-0">Customer Vehicles</h5>
+            <span style="position:absolute; right:20px;">
+              <button type="button" id="veh-export-pdf" class="btn btn-sm btn-danger"><i class="fas fa-file-pdf"></i> PDF</button>
+              <button type="button" id="veh-export-excel" class="btn btn-sm btn-success"><i class="fas fa-file-excel"></i> Excel</button>
+            </span>
+            </div>
+                <div class="card-body">
+                    <table class="table table-striped" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Vehicle Type</th>
+                                <th>Vehicle Number</th>
+                                <th>Vehicle Brand</th>
+                                <th>Vehicle Color</th>
+                                <th>Transports</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vehicles-body">
+                            {% for voucher in vouchers %}
+                          <tr>
+                            <td class="align-middle">{{ voucher.car_type }}</td>
+                            <td class="align-middle">{{ voucher.car_num }}</td>
+                            <td class="align-middle">{{ voucher.car_mark }}</td>
+                            <td class="align-middle">{{ voucher.car_color }}</td>
+                            <td class="align-middle">—</td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                    </table>
+                    <div id="vehicles-pager" class="d-flex justify-content-between align-items-center mt-2">
+                        <button type="button" id="veh-prev" class="btn btn-sm btn-outline-primary">Prev</button>
+                        <span id="veh-pageinfo" class="text-muted"></span>
+                        <button type="button" id="veh-next" class="btn btn-sm btn-outline-primary">Next</button>
+                    </div>
+                </div>
+				</div>
+
+                <div class="card">
                     <div class="input-group mb-3" style="padding: 10px 20px 0 20px;">
             <h5 class="card-title mb-0">Customer Attachments</h5>
             {% if user.is_staff %}
@@ -151,40 +191,7 @@ background-color: #f7f7fc;
 						</table>
 					</div>
             </div>
-            <div class="card">
-            <div class="input-group mb-3" style="padding: 10px 20px 0 20px;">
-            <h5 class="card-title mb-0">Customer Vehicles</h5>
-            </div>
-                <div class="card-body">
-                    <table class="table table-striped" style="width:100%">
-                        <thead>
-                            <tr>
-                                <th>Vehicle Type</th>
-                                <th>Vehicle Number</th>
-                                <th>Vehicle Brand</th>
-                                <th>Vehicle Color</th>
-                                <th>Transports</th>
-                            </tr>
-                        </thead>
-                        <tbody id="vehicles-body">
-                            {% for voucher in vouchers %}
-                          <tr>
-                            <td class="align-middle">{{ voucher.car_type }}</td>
-                            <td class="align-middle">{{ voucher.car_num }}</td>
-                            <td class="align-middle">{{ voucher.car_mark }}</td>
-                            <td class="align-middle">{{ voucher.car_color }}</td>
-                            <td class="align-middle">—</td>
-                          </tr>
-                          {% endfor %}
-                        </tbody>
-                    </table>
-                    <div id="vehicles-pager" class="d-flex justify-content-between align-items-center mt-2">
-                        <button type="button" id="veh-prev" class="btn btn-sm btn-outline-primary">Prev</button>
-                        <span id="veh-pageinfo" class="text-muted"></span>
-                        <button type="button" id="veh-next" class="btn btn-sm btn-outline-primary">Next</button>
-                    </div>
-                </div>
-				</div>
+
 			</div>
 			<div class="col-xl-4">
 				<div class="card">
@@ -426,7 +433,7 @@ background-color: #f7f7fc;
 			if (page < 1) page = 1;
 			var s = (page - 1) * pageSize, e = s + pageSize;
 			vrows.forEach(function (r, i) { r.style.display = (i >= s && i < e) ? '' : 'none'; });
-			info.textContent = 'Page ' + page + ' of ' + pages + ' (' + vrows.length + ' vehicles)';
+			info.textContent = 'Page ' + page + ' of ' + pages + ' (' + vrows.length + ' results)';
 			prev.disabled = (page === 1);
 			next.disabled = (page === pages);
 			pager.style.display = vrows.length ? '' : 'none';
@@ -486,6 +493,15 @@ background-color: #f7f7fc;
 		document.getElementById('act_clear').addEventListener('click', function () {
 			fromEl.value = ''; toEl.value = ''; carEl.value = ''; load();
 		});
+
+        function exportVehicles(fmt) {
+			var params = ['format=' + fmt];
+			if (fromEl.value && toEl.value) { params.push('date_from=' + fromEl.value, 'date_to=' + toEl.value); }
+			if (carEl.value.trim()) { params.push('car=' + encodeURIComponent(carEl.value.trim())); }
+			window.open('/customers/export_vehicles/' + id + '/?' + params.join('&'), '_blank');
+		}
+		document.getElementById('veh-export-pdf').addEventListener('click', function () { exportVehicles('pdf'); });
+		document.getElementById('veh-export-excel').addEventListener('click', function () { exportVehicles('excel'); });
 
 		// initial paginate of the server-rendered rows, then load
 		repaginate();

@@ -205,6 +205,18 @@
                             Summary Report
                         </label>
                     </div>
+                    <hr>
+                    <div class="d-flex align-items-center" style="gap:18px;">
+                        <span style="font-weight:600;">Format:</span>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="exportFormat" value="pdf" id="fmtPdf" checked>
+                            <label class="form-check-label" for="fmtPdf">PDF</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="exportFormat" value="xlsx" id="fmtXlsx">
+                            <label class="form-check-label" for="fmtXlsx">Excel</label>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
@@ -295,7 +307,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         let baseUrl = exportBtn.dataset.baseUrl;
-        let url = baseUrl + '?reports=' + selected.join(',');
+        let fmt = (document.querySelector('#exportModal input[name="exportFormat"]:checked') || {}).value || 'pdf';
+        let url = baseUrl + '?reports=' + selected.join(',') + '&format=' + fmt;
 
         let btn = this;
         let originalHtml = btn.innerHTML;

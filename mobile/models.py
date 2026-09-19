@@ -26,8 +26,17 @@ class Used_Vehicle(models.Model):
     notes = models.CharField(blank=True, null=True, max_length=500)
     created_by = models.CharField(blank=True, null=True, max_length=50)
     created_at = models.DateTimeField(default=datetime.now)
+    # JoTrack device id/name. Leave blank to match by vehicle_number automatically.
+    jotrack_device = models.CharField(max_length=100, null=True, blank=True)
+    jotrack_terminal = models.CharField(max_length=50, null=True, blank=True)
+
     def __str__(self):
         return self.vehicle_number
+    
+    @property
+    def jotrack_key(self):
+        """The name/id used to match this vehicle against JoTrack live data."""
+        return (self.jotrack_device or self.vehicle_number or "").strip()
 
 class Auto_Oil(models.Model):
     vehicle = models.ForeignKey(Used_Vehicle, on_delete=models.CASCADE, null=True)

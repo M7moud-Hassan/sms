@@ -1,0 +1,337 @@
+{% extends 'base.html' %}
+{% load static tz %}
+{% block content %}
+<style>
+    .ot-wrap { margin: 30px; }
+    .ot-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .ot-title h3 { color: darkblue; font-weight: bold; margin: 0; }
+    .ot-tabs { display: flex; gap: 4px; border-bottom: 3px solid #b45309; margin-bottom: 20px; }
+    .ot-tab { border: 0; background: #f1f5f9; color: #334155; padding: 10px 22px; font-weight: bold; cursor: pointer; }
+    .ot-tab.active { background: #b45309; color: #fff; }
+    .ot-pane { display: none; }
+    .ot-pane.active { display: block; }
+    .ot-label { color: darkblue; font-weight: bold; }
+    .ot-input { background-color: lightgoldenrodyellow !important; color: red !important; font-weight: bold !important; }
+    .ot-filter { background: whitesmoke; padding: 18px; margin-bottom: 18px; }
+    .ot-chips span { display: inline-block; background: #fff7ed; color: #7c2d12; border: 1px solid #fed7aa;
+                     padding: 4px 10px; margin: 0 6px 6px 0; font-size: 13px; font-weight: bold; }
+    .ot-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 18px 0; }
+    .ot-kpi { background: #fff; border-top: 4px solid #b45309; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 14px; text-align: center; }
+    .ot-kpi .v { font-size: 26px; font-weight: bold; color: #7c2d12; }
+    .ot-kpi .l { font-size: 13px; color: #64748b; }
+    .ot-table thead th { background: #b45309; color: #fff; text-align: center; vertical-align: middle; }
+    .ot-table td { text-align: center; vertical-align: middle; }
+    .ot-table tfoot td { background: #fde68a; font-weight: bold; color: #7c2d12; }
+    .ot-table tr.ot-driver-row { cursor: pointer; }
+    .ot-table tr.ot-driver-row.picked td { background: #ffedd5; }
+    .ot-scroll { max-height: 420px; overflow: auto; }
+    .ot-settings { background: whitesmoke; padding: 22px; max-width: 760px; }
+    .ot-rule { background: #fff; border: 1px solid #e2e8f0; padding: 14px; margin-bottom: 14px; }
+    .ot-help { font-size: 13px; color: #64748b; }
+    .ot-off-badge { display: inline-block; background: #0369a1; color: #fff; font-size: 11px; font-weight: bold; padding: 2px 7px; margin-left: 4px; }
+    .ot-days { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+    .ot-days input { display: none; }
+    .ot-days label { border: 1px solid #cbd5e1; background: #fff; padding: 6px 12px; cursor: pointer; font-weight: bold; color: #334155; user-select: none; }
+    .ot-days input:checked + label { background: #0369a1; border-color: #0369a1; color: #fff; }
+</style>
+
+<div class="ot-wrap">
+    <div class="ot-title">
+        <h3><i class="fas fa-user-clock"></i> Drivers Overtime</h3>
+        <a href="{% url 'drivers_index' %}" class="btn btn-secondary" style="border-radius: 0;">
+            <i class="fas fa-arrow-left"></i> Back to Drivers
+        </a>
+    </div>
+
+    <div class="ot-tabs">
+        <button type="button" class="ot-tab {% if tab != 'settings' %}active{% endif %}" data-pane="report">
+            <i class="fas fa-chart-bar"></i> Overtime Report
+        </button>
+        <button type="button" class="ot-tab {% if tab == 'settings' %}active{% endif %}" data-pane="settings">
+            <i class="fas fa-cog"></i> Overtime Settings
+        </button>
+    </div>
+
+    <!-- ============================== REPORT TAB ============================== -->
+    <div class="ot-pane {% if tab != 'settings' %}active{% endif %}" id="pane-report">
+        <form method="get" class="ot-filter" id="ot-filter-form">
+            <input type="hidden" name="tab" value="report">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="ot-label" for="date_from">From</label>
+                    <input type="date" class="form-control ot-input" id="date_from" name="date_from" value="{{ date_from|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="ot-label" for="date_to">To</label>
+                    <input type="date" class="form-control ot-input" id="date_to" name="date_to" value="{{ date_to|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="ot-label d-block">Drivers</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="scope" id="scope-all" value="all" {% if scope != 'selected' %}checked{% endif %}>
+                        <label class="form-check-label" for="scope-all">All</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="scope" id="scope-selected" value="selected" {% if scope == 'selected' %}checked{% endif %}>
+                        <label class="form-check-label" for="scope-selected">Selected</label>
+                    </div>
+                </div>
+                <div class="col-md-3" id="drivers-select-wrap" style="{% if scope != 'selected' %}display: none;{% endif %}">
+                    <label class="ot-label" for="drivers-select">Select drivers <span class="ot-help">(Ctrl + click for many)</span></label>
+                    <select class="form-select ot-input" id="drivers-select" name="drivers" multiple size="4">
+                        {% for d in all_drivers %}
+                        <option value="{{ d.id }}" {% if d.id in selected_ids %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex" style="gap: 8px;">
+                    <button type="submit" name="search" value="1" class="btn btn-primary" style="border-radius: 0; height: 42px;">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                    <button type="submit" formaction="{% url 'export_overtime' %}" class="btn btn-success" style="border-radius: 0; height: 42px;">
+                        <i class="fas fa-file-excel"></i> Export Excel
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <div class="ot-chips">
+            <span>Work day: {{ ot_settings.work_start|time:"h:i A" }} – {{ ot_settings.work_end|time:"h:i A" }}</span>
+            <span>Before work: {% if ot_settings.count_before %}× {{ ot_settings.before_multiplier }}{% else %}not counted{% endif %}</span>
+            <span>After work: {% if ot_settings.count_after %}× {{ ot_settings.after_multiplier }}{% else %}not counted{% endif %}</span>
+            <span>Off days: {% if off_day_names %}{{ off_day_names|join:", " }} × {{ ot_settings.off_day_multiplier }}{% else %}none{% endif %}</span>
+            <span>Grace: {{ ot_settings.grace_minutes }} min</span>
+        </div>
+
+        {% if report %}
+            {% if report.open_vouchers %}
+            <div class="alert alert-warning" style="border-radius: 0;">
+                <i class="fas fa-exclamation-triangle"></i>
+                {{ report.open_vouchers }} voucher(s) in this period were received but not delivered yet, so they are not counted.
+            </div>
+            {% endif %}
+
+            <div class="ot-kpis">
+                <div class="ot-kpi"><div class="v">{{ report.totals.total_hours|floatformat:2 }}</div><div class="l">Overtime hours</div></div>
+                <div class="ot-kpi"><div class="v">{{ report.totals.weighted_hours|floatformat:2 }}</div><div class="l">Weighted hours (× multiplier)</div></div>
+                <div class="ot-kpi"><div class="v">{{ report.totals.before_hours|floatformat:2 }}</div><div class="l">Before work hours</div></div>
+                <div class="ot-kpi"><div class="v">{{ report.totals.after_hours|floatformat:2 }}</div><div class="l">After work hours</div></div>
+                <div class="ot-kpi"><div class="v">{{ report.totals.off_day_hours|floatformat:2 }}</div><div class="l">Off-day hours</div></div>
+                <div class="ot-kpi"><div class="v">{{ report.totals.overtime_days }}</div><div class="l">Overtime days</div></div>
+            </div>
+
+            <h5 class="ot-label">Summary by driver <span class="ot-help">(click a driver to filter the daily details)</span></h5>
+            <div class="ot-scroll mb-4">
+                <table class="table table-striped table-borderless ot-table" id="ot-summary">
+                    <thead>
+                        <tr>
+                            <th>Driver</th><th>Work days</th><th>Overtime days</th><th>Off days worked</th><th>Vouchers</th>
+                            <th>Before work (h)</th><th>After work (h)</th><th>Off day (h)</th><th>Total (h)</th><th>Weighted (h)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for d in report.drivers %}
+                        <tr class="ot-driver-row" data-driver="{{ d.driver }}">
+                            <td class="fw-bold">{{ d.driver }}</td>
+                            <td>{{ d.work_days }}</td>
+                            <td>{{ d.overtime_days }}</td>
+                            <td>{{ d.off_days_worked }}</td>
+                            <td>{{ d.vouchers }}</td>
+                            <td>{{ d.before_hours|floatformat:2 }}</td>
+                            <td>{{ d.after_hours|floatformat:2 }}</td>
+                            <td>{{ d.off_day_hours|floatformat:2 }}</td>
+                            <td>{{ d.total_hours|floatformat:2 }}</td>
+                            <td class="fw-bold text-danger">{{ d.weighted_hours|floatformat:2 }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="10">No delivered vouchers in this period</td></tr>
+                    {% endfor %}
+                    </tbody>
+                    {% if report.drivers %}
+                    <tfoot>
+                        <tr>
+                            <td>Total</td>
+                            <td>{{ report.totals.work_days }}</td>
+                            <td>{{ report.totals.overtime_days }}</td>
+                            <td>{{ report.totals.off_days_worked }}</td>
+                            <td>{{ report.totals.vouchers }}</td>
+                            <td>{{ report.totals.before_hours|floatformat:2 }}</td>
+                            <td>{{ report.totals.after_hours|floatformat:2 }}</td>
+                            <td>{{ report.totals.off_day_hours|floatformat:2 }}</td>
+                            <td>{{ report.totals.total_hours|floatformat:2 }}</td>
+                            <td>{{ report.totals.weighted_hours|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+
+            <h5 class="ot-label">Daily details <span id="ot-detail-filter" class="ot-help"></span></h5>
+            <div class="ot-scroll">
+                <table class="table table-striped table-borderless ot-table" id="ot-details">
+                    <thead>
+                        <tr>
+                            <th>Driver</th><th>Date</th><th>Day</th><th>First begin</th><th>Last end</th>
+                            <th>Vouchers</th><th>Before work (h)</th><th>After work (h)</th><th>Off day (h)</th><th>Total (h)</th><th>Weighted (h)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in report.rows %}
+                        <tr data-driver="{{ r.driver }}">
+                            <td>{{ r.driver }}</td>
+                            <td>{{ r.date|date:"Y-m-d" }}</td>
+                            <td>{{ r.date|date:"l" }}{% if r.is_off_day %} <span class="ot-off-badge">Off day</span>{% endif %}</td>
+                            <td>{{ r.first_start|timezone:"Asia/Amman"|date:"h:i A" }}</td>
+                            <td>{{ r.last_end|timezone:"Asia/Amman"|date:"h:i A" }}{% if r.last_end|timezone:"Asia/Amman"|date:"Y-m-d" != r.date|date:"Y-m-d" %} <span class="ot-help">(+1 day)</span>{% endif %}</td>
+                            <td>{{ r.vouchers }}</td>
+                            <td>{{ r.before_hours|floatformat:2 }}</td>
+                            <td>{{ r.after_hours|floatformat:2 }}</td>
+                            <td>{{ r.off_day_hours|floatformat:2 }}</td>
+                            <td>{{ r.total_hours|floatformat:2 }}</td>
+                            <td class="fw-bold text-danger">{{ r.weighted_hours|floatformat:2 }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="11">No overtime found for this period</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted" style="padding: 40px;">
+                Choose a date range and drivers, then press <b>Search</b> or <b>Export Excel</b>.
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- ============================== SETTINGS TAB ============================== -->
+    <div class="ot-pane {% if tab == 'settings' %}active{% endif %}" id="pane-settings">
+        {% if saved %}
+        <div class="alert alert-success" style="border-radius: 0; max-width: 760px;"><i class="fas fa-check"></i> Overtime settings saved.</div>
+        {% endif %}
+        {% if settings_error %}
+        <div class="alert alert-danger" style="border-radius: 0; max-width: 760px;"><i class="fas fa-times"></i> {{ settings_error }}</div>
+        {% endif %}
+
+        <form method="post" action="{% url 'drivers_overtime' %}" class="ot-settings">
+            {% csrf_token %}
+            <fieldset {% if not user.is_staff %}disabled{% endif %}>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="ot-label" for="work_start">Work day begins at</label>
+                        <input type="time" class="form-control ot-input" id="work_start" name="work_start" value="{{ ot_settings.work_start|time:'H:i' }}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="ot-label" for="work_end">Work day ends at</label>
+                        <input type="time" class="form-control ot-input" id="work_end" name="work_end" value="{{ ot_settings.work_end|time:'H:i' }}" required>
+                    </div>
+                </div>
+
+                <div class="ot-rule">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input ot-toggle" type="checkbox" id="count_before" name="count_before" data-target="before_multiplier" {% if ot_settings.count_before %}checked{% endif %}>
+                        <label class="form-check-label ot-label" for="count_before">Count hours worked <u>before</u> the work day begins (optional)</label>
+                    </div>
+                    <label class="ot-label" for="before_multiplier">Multiplier for each hour</label>
+                    <input type="number" step="0.01" min="0" class="form-control ot-input" id="before_multiplier" name="before_multiplier" value="{{ ot_settings.before_multiplier }}">
+                </div>
+
+                <div class="ot-rule">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input ot-toggle" type="checkbox" id="count_after" name="count_after" data-target="after_multiplier" {% if ot_settings.count_after %}checked{% endif %}>
+                        <label class="form-check-label ot-label" for="count_after">Count hours worked <u>after</u> the work day ends</label>
+                    </div>
+                    <label class="ot-label" for="after_multiplier">Multiplier for each hour</label>
+                    <input type="number" step="0.01" min="0" class="form-control ot-input" id="after_multiplier" name="after_multiplier" value="{{ ot_settings.after_multiplier }}">
+                </div>
+
+                <div class="ot-rule">
+                    <label class="ot-label d-block">Weekly off days</label>
+                    <div class="ot-days">
+                        {% for num, name in weekday_choices %}
+                        <input type="checkbox" id="off_day_{{ num }}" name="off_days" value="{{ num }}" {% if num in off_days_set %}checked{% endif %}>
+                        <label for="off_day_{{ num }}">{{ name }}</label>
+                        {% endfor %}
+                    </div>
+                    <label class="ot-label" for="off_day_multiplier">Multiplier for each hour on an off day</label>
+                    <input type="number" step="0.01" min="0" class="form-control ot-input" id="off_day_multiplier" name="off_day_multiplier" value="{{ ot_settings.off_day_multiplier }}">
+                    <div class="ot-help">On an off day every hour counts, from the first begin to the last end. The before/after rules above do not apply.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="ot-label" for="grace_minutes">Grace period (minutes)</label>
+                    <input type="number" min="0" step="1" class="form-control ot-input" id="grace_minutes" name="grace_minutes" value="{{ ot_settings.grace_minutes }}">
+                    <div class="ot-help">Overtime shorter than this (per day: before work, after work, or off day) is ignored.</div>
+                </div>
+
+                <div class="ot-help mb-3">
+                    How it is calculated: for each driver and day, work runs from the first voucher begin (receipt from) to the last voucher end (receipt to).
+                    On a work day only the part before the begin time or after the end time is overtime; on an off day the whole span is overtime.
+                    A night trip that ends after midnight stays on the day it began.<br>
+                    Examples: work day 08:00–16:00, last delivery 18:30 → 2.50 h × 1.25 = 3.13 weighted hours.
+                    Off day, first begin 10:00, last end 14:30 → 4.50 h × 1.50 = 6.75 weighted hours.
+                </div>
+
+                {% if user.is_staff %}
+                <button type="submit" name="save_settings" value="1" class="btn btn-primary" style="border-radius: 0;">
+                    <i class="fas fa-save"></i> Save Settings
+                </button>
+                {% endif %}
+            </fieldset>
+            {% if ot_settings.updated_by %}
+            <div class="ot-help mt-2">Last updated by {{ ot_settings.updated_by }} on {{ ot_settings.updated_at|timezone:"Asia/Amman"|date:"Y-m-d h:i A" }}</div>
+            {% endif %}
+            {% if not user.is_staff %}
+            <div class="ot-help mt-2">Only staff users can change these settings.</div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    // ---- tabs (no Bootstrap JS needed) ----
+    document.querySelectorAll('.ot-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.ot-tab').forEach(function (b) { b.classList.remove('active'); });
+            document.querySelectorAll('.ot-pane').forEach(function (p) { p.classList.remove('active'); });
+            btn.classList.add('active');
+            document.getElementById('pane-' + btn.dataset.pane).classList.add('active');
+            var url = new URL(window.location);
+            url.searchParams.set('tab', btn.dataset.pane);
+            url.searchParams.delete('saved');
+            history.replaceState(null, '', url);
+        });
+    });
+
+    // ---- all / selected drivers ----
+    var wrap = document.getElementById('drivers-select-wrap');
+    document.querySelectorAll('input[name="scope"]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            wrap.style.display = (this.value === 'selected') ? 'block' : 'none';
+        });
+    });
+
+    // ---- enable multiplier only when its rule is on ----
+    document.querySelectorAll('.ot-toggle').forEach(function (t) {
+        var sync = function () { document.getElementById(t.dataset.target).readOnly = !t.checked; };
+        t.addEventListener('change', sync);
+        sync();
+    });
+
+    // ---- click a driver in the summary to filter the details ----
+    var info = document.getElementById('ot-detail-filter');
+    document.querySelectorAll('#ot-summary .ot-driver-row').forEach(function (row) {
+        row.addEventListener('click', function () {
+            var already = row.classList.contains('picked');
+            document.querySelectorAll('#ot-summary .ot-driver-row').forEach(function (r) { r.classList.remove('picked'); });
+            var name = already ? null : row.dataset.driver;
+            if (name) { row.classList.add('picked'); }
+            document.querySelectorAll('#ot-details tbody tr[data-driver]').forEach(function (tr) {
+                tr.style.display = (!name || tr.dataset.driver === name) ? '' : 'none';
+            });
+            info.textContent = name ? '(showing ' + name + ' only, click again to show all)' : '';
+        });
+    });
+})();
+</script>
+{% endblock %}

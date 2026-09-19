@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Sum, Max, Q, F, Value as V, CharField, DecimalField, OuterRef, Subquery
+from django.db.models import Sum, Max, Q, F, Value as V, CharField, DecimalField, OuterRef, Subquery, Count
 from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse, Http404
 import io
 from django.urls import reverse
@@ -23,6 +23,7 @@ from django.utils.timezone import localtime, now
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
 from .forms import SearchForm, ExcelUploadForm
+from . import customer_reports as cr, customer_reports_xlsx as cx
 from drivers.models import PMission, SMission
 from recipt_vouchers.models import Vouchers
 from .models import Customers, Papers, Treasury
@@ -483,24 +484,33 @@ def export_treasury(request, id, date_from, date_to):
         require_id__id=id, type="ذمم", tamount__gt=F('customer_paid')
     ).order_by('-date').values('number', 'date', 'driver__name', 'tamount', 'customer_paid'))
 
-    # ---- build the selected reports ----
-    from . import customer_reports as cr
+    from .report_xlsx import deliver
+
+    fmt = request.GET.get('format', 'pdf')
     available = {
-        "account_statement": ("account_statement.pdf",
+        "account_statement": ("account_statement",
             lambda b: cr.build_account_statement_pdf(b, customer_name, date_from, date_to,
-                                                     entries, total_invoiced, total_treasury, required_amount)),
-        "vehicles": ("vehicles.pdf",
-            lambda b: cr.build_vehicles_pdf(b, customer_name, date_from, date_to, vehicles)),
-        "transactions": ("transactions.pdf",
-            lambda b: cr.build_transactions_pdf(b, customer_name, date_from, date_to, txns)),
-        "timeline": ("timeline.pdf",
-            lambda b: cr.build_timeline_pdf(b, customer_name, date_from, date_to, tasks)),
-        "invoices": ("invoices.pdf",
-            lambda b: cr.build_invoices_pdf(b, customer_name, date_from, date_to, invoices_all)),
-        "outstanding": ("outstanding.pdf",
-            lambda b: cr.build_outstanding_pdf(b, customer_name, date_from, date_to, outstanding_rows)),
-        "paid": ("paid.pdf",
-            lambda b: cr.build_paid_pdf(b, customer_name, date_from, date_to, paid_rows)),
+                                                     entries, total_invoiced, total_treasury, required_amount),
+            lambda b: cx.build_account_statement_xlsx(b, customer_name, date_from, date_to,
+                                                      entries, total_invoiced, total_treasury, required_amount)),
+        "vehicles": ("vehicles",
+            lambda b: cr.build_vehicles_pdf(b, customer_name, date_from, date_to, vehicles),
+            lambda b: cx.build_vehicles_xlsx(b, customer_name, date_from, date_to, vehicles)),
+        "transactions": ("transactions",
+            lambda b: cr.build_transactions_pdf(b, customer_name, date_from, date_to, txns),
+            lambda b: cx.build_transactions_xlsx(b, customer_name, date_from, date_to, txns)),
+        "timeline": ("timeline",
+            lambda b: cr.build_timeline_pdf(b, customer_name, date_from, date_to, tasks),
+            lambda b: cx.build_timeline_xlsx(b, customer_name, date_from, date_to, tasks)),
+        "invoices": ("invoices",
+            lambda b: cr.build_invoices_pdf(b, customer_name, date_from, date_to, invoices_all),
+            lambda b: cx.build_invoices_xlsx(b, customer_name, date_from, date_to, invoices_all)),
+        "outstanding": ("outstanding",
+            lambda b: cr.build_outstanding_pdf(b, customer_name, date_from, date_to, outstanding_rows),
+            lambda b: cx.build_outstanding_xlsx(b, customer_name, date_from, date_to, outstanding_rows)),
+        "paid": ("paid",
+            lambda b: cr.build_paid_pdf(b, customer_name, date_from, date_to, paid_rows),
+            lambda b: cx.build_paid_xlsx(b, customer_name, date_from, date_to, paid_rows)),
     }
 
     selected = [s.strip() for s in request.GET.get('reports', '').split(',') if s.strip()]
@@ -510,23 +520,7 @@ def export_treasury(request, id, date_from, date_to):
     if not chosen:
         raise Http404("No valid report selected")
 
-    if len(chosen) == 1:
-        name, build = chosen[0]
-        buf = io.BytesIO(); build(buf); buf.seek(0)
-        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{name}"'
-        response.set_cookie('export_download_done', 'true', max_age=60)
-        return response
-
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for name, build in chosen:
-            b = io.BytesIO(); build(b); zf.writestr(name, b.getvalue())
-    zip_buf.seek(0)
-    response = HttpResponse(zip_buf.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="Customer_Report_{customer_name}.zip"'
-    response.set_cookie('export_download_done', 'true', max_age=60)
-    return response
+    return deliver(request, chosen, fmt, zip_basename=f"Customer_Report_{customer_name}")
 
 def filter_invoices(request, id):
     date_from = datetime.strptime(request.GET.get('date_from'), '%Y-%m-%d')
@@ -810,8 +804,6 @@ def export_combined_invoice(request, id):
 
 
 def customer_activities(request, id):
-    from recipt_vouchers.models import Vouchers   # transport vouchers
-    from django.db.models import Count
 
     amman_tz = pytz.timezone('Asia/Amman')
     date_from = request.GET.get('date_from')
@@ -888,7 +880,6 @@ def update_customer_balance(customer_id):
 
 @login_required
 def customer_info_report(request):
-    from . import customer_reports as cr
     qs = Customers.objects.all()
 
     query = (request.GET.get('query') or '').strip()
@@ -917,3 +908,55 @@ def customer_info_report(request):
     response = HttpResponse(buf.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="Customers_Info.pdf"'
     return response
+
+def export_customer_vehicles(request, id):
+    customer = get_object_or_404(Customers, id=id)
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    car = (request.GET.get('car') or '').strip()
+    fmt = (request.GET.get('format') or 'pdf').lower()
+
+    vouchers = Vouchers.objects.filter(car_owner__id=id)
+    if date_from and date_to:
+        vouchers = vouchers.filter(receipt_to_time__date__range=(date_from, date_to))
+    if car:
+        vouchers = vouchers.filter(car_num__icontains=car)
+
+    counts = {}
+    for row in vouchers.values('car_num', 'car_type').annotate(n=Count('id')):
+        counts[(row['car_num'], row['car_type'])] = row['n']
+
+    seen, vehicles = set(), []
+    for v in vouchers.values('car_num', 'car_type', 'car_mark', 'car_color').order_by('car_num'):
+        key = (v['car_num'], v['car_type'])
+        if key in seen:
+            continue
+        seen.add(key)
+        vehicles.append({
+            'car_type': v['car_type'] or '',
+            'car_num': v['car_num'] or '',
+            'car_mark': v['car_mark'] or '',
+            'car_color': v['car_color'] or '',
+            'transports': counts.get(key, 0),
+        })
+
+    df = date_from or ''
+    dt = date_to or ''
+
+    if fmt == 'excel':
+        buf = io.BytesIO()
+        cx.build_customer_vehicles_xlsx(buf, customer.name, df, dt, vehicles)
+        buf.seek(0)
+        resp = HttpResponse(
+            buf.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f'attachment; filename="Customer_{id}_Vehicles.xlsx"'
+        return resp
+
+    # default: PDF
+    buf = io.BytesIO()
+    cr.build_customer_vehicles_pdf(buf, customer.name, df, dt, vehicles)
+    buf.seek(0)
+    resp = HttpResponse(buf.read(), content_type='application/pdf')
+    resp['Content-Disposition'] = f'attachment; filename="Customer_{id}_Vehicles.pdf"'
+    return resp

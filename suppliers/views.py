@@ -22,6 +22,7 @@ import pytz
 from django.utils.timezone import localtime
 from datetime import datetime, timedelta, date
 from django.contrib.auth.models import User
+from mobile.jotrack import JoTrackClient, JoTrackError
 from .forms import SearchForm
 from customers import customer_reports as cr   # same module as the vehicle reports
 from .models import Supplier, Treasury, MainItems, Invoices, Items, Papers
@@ -619,6 +620,49 @@ def vehicles(request):
             return render(request, "suppliers/vehicles.html", context)
 
 @login_required
+def jotrack_live(request):
+    """Location-only per vehicle (endpoint has no speed/status)."""
+    from mobile.jotrack import JoTrackClient
+    devices = {}
+    qs = Used_Vehicle.objects.exclude(jotrack_terminal__isnull=True).exclude(jotrack_terminal="")
+    for v in qs:
+        try:
+            d = JoTrackClient.get_last_location(v.jotrack_terminal.strip())
+        except Exception:
+            d = None
+        if d:
+            devices[v.vehicle_number] = {
+                "lat": d["lat"], "lng": d["lng"], "address": d["address"],
+            }
+    return JsonResponse({"ok": True, "devices": devices})
+
+@login_required
+def vehicle_track(request, id):
+    from mobile.jotrack import JoTrackClient, JoTrackError
+    vehicle = get_object_or_404(Used_Vehicle, id=id)
+    key = (vehicle.jotrack_terminal or "").strip()
+    if not key:
+        return JsonResponse({"ok": False,
+                             "error": "No terminal id set for this vehicle."}, status=404)
+    try:
+        d = JoTrackClient.get_last_location(key)
+    except JoTrackError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=502)
+    except Exception:
+        return JsonResponse({"ok": False, "error": "JoTrack unavailable"}, status=502)
+
+    if not d:
+        return JsonResponse({"ok": False,
+                             "error": "No live data for this vehicle."}, status=404)
+    return JsonResponse({
+        "ok": True,
+        "number": vehicle.vehicle_number,
+        "lat": d["lat"], "lng": d["lng"],
+        "address": d["address"],
+        "maps_url": f"https://www.google.com/maps?q={d['lat']},{d['lng']}",
+    })
+
+@login_required
 def edit_invoice(request, id):
     invoice = get_object_or_404(Invoices, id=id)
     if request.method == 'POST':
@@ -909,15 +953,19 @@ def export_treasury(request, id, date_from, date_to):
         supplier__id=id, date__range=(date_from, date_to)
     ).order_by('number').values('number', 'date', 'type', 'tamount', 'paid', 'notes'))
 
-    # ---- registry ----
+    from . import supplier_reports_xlsx as sx
+    from .report_xlsx import deliver
+
+    fmt = request.GET.get('format', 'pdf')
     available = {
-        "account_statement": ("account_statement.pdf",
-            lambda b: cr.build_account_statement_pdf(
-                b, supplier_name, date_from, date_to, entries,
-                total_inv, total_pay, required_amount)),
-        "invoices": ("supplier_invoices.pdf",
-            lambda b: cr.build_supplier_invoices_pdf(
-                b, supplier_name, date_from, date_to, inv_rows)),
+        "account_statement": ("account_statement",
+            lambda b: cr.build_account_statement_pdf(b, supplier_name, date_from, date_to,
+                                                     entries, total_inv, total_pay, required_amount),
+            lambda b: sx.build_account_statement_xlsx(b, supplier_name, date_from, date_to,
+                                                      entries, total_inv, total_pay, required_amount)),
+        "invoices": ("supplier_invoices",
+            lambda b: cr.build_supplier_invoices_pdf(b, supplier_name, date_from, date_to, inv_rows),
+            lambda b: sx.build_supplier_invoices_xlsx(b, supplier_name, date_from, date_to, inv_rows)),
     }
 
     selected = [s.strip() for s in request.GET.get('reports', '').split(',') if s.strip()]
@@ -927,23 +975,7 @@ def export_treasury(request, id, date_from, date_to):
     if not chosen:
         raise Http404("No valid report selected")
 
-    if len(chosen) == 1:
-        name, build = chosen[0]
-        buf = io.BytesIO(); build(buf); buf.seek(0)
-        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{name}"'
-        response.set_cookie('export_download_done', 'true', max_age=60)
-        return response
-
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for name, build in chosen:
-            b = io.BytesIO(); build(b); zf.writestr(name, b.getvalue())
-    zip_buf.seek(0)
-    response = HttpResponse(zip_buf.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="Supplier_Reports_{supplier_name}.zip"'
-    response.set_cookie('export_download_done', 'true', max_age=60)
-    return response
+    return deliver(request, chosen, fmt, zip_basename=f"Supplier_Reports_{supplier_name}")
 
 @login_required
 def view_att(request, id):
@@ -1210,16 +1242,23 @@ def export_vehicle_reports(request, id, date_from, date_to):
         'invoice__date', 'invoice__supplier__name', 'item', 'qty', 'amount'
     )]
 
-    # ---- registry of available reports ----
+    from . import vehicle_reports_xlsx as vx
+    from .report_xlsx import deliver
+
+    fmt = request.GET.get('format', 'pdf')
     available = {
-        "revenue":     ("revenue.pdf",
-            lambda b: cr.build_vehicle_revenue_pdf(b, vehicle_number, date_from, date_to, revenue_rows)),
-        "expenses":    ("expenses.pdf",
-            lambda b: cr.build_vehicle_expenses_pdf(b, vehicle_number, date_from, date_to, expenses_rows)),
-        "fuel":        ("fuel_consumption.pdf",
-            lambda b: cr.build_fuel_consumption_pdf(b, vehicle_number, date_from, date_to, segments)),
-        "maintenance": ("maintenance_parts.pdf",
-            lambda b: cr.build_maintenance_parts_pdf(b, vehicle_number, date_from, date_to, maintenance_rows)),
+        "revenue": ("revenue",
+            lambda b: cr.build_vehicle_revenue_pdf(b, vehicle_number, date_from, date_to, revenue_rows),
+            lambda b: vx.build_vehicle_revenue_xlsx(b, vehicle_number, date_from, date_to, revenue_rows)),
+        "expenses": ("expenses",
+            lambda b: cr.build_vehicle_expenses_pdf(b, vehicle_number, date_from, date_to, expenses_rows),
+            lambda b: vx.build_vehicle_expenses_xlsx(b, vehicle_number, date_from, date_to, expenses_rows)),
+        "fuel": ("fuel_consumption",
+            lambda b: cr.build_fuel_consumption_pdf(b, vehicle_number, date_from, date_to, segments),
+            lambda b: vx.build_fuel_consumption_xlsx(b, vehicle_number, date_from, date_to, segments)),
+        "maintenance": ("maintenance_parts",
+            lambda b: cr.build_maintenance_parts_pdf(b, vehicle_number, date_from, date_to, maintenance_rows),
+            lambda b: vx.build_maintenance_parts_xlsx(b, vehicle_number, date_from, date_to, maintenance_rows)),
     }
 
     selected = [s.strip() for s in request.GET.get('reports', '').split(',') if s.strip()]
@@ -1229,20 +1268,4 @@ def export_vehicle_reports(request, id, date_from, date_to):
     if not chosen:
         raise Http404("No valid report selected")
 
-    if len(chosen) == 1:
-        name, build = chosen[0]
-        buf = io.BytesIO(); build(buf); buf.seek(0)
-        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{name}"'
-        response.set_cookie('export_download_done', 'true', max_age=60)
-        return response
-
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for name, build in chosen:
-            b = io.BytesIO(); build(b); zf.writestr(name, b.getvalue())
-    zip_buf.seek(0)
-    response = HttpResponse(zip_buf.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="Vehicle_Reports_{vehicle_number}.zip"'
-    response.set_cookie('export_download_done', 'true', max_age=60)
-    return response
+    return deliver(request, chosen, fmt, zip_basename=f"Vehicle_Reports_{vehicle_number}")

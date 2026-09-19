@@ -541,7 +541,7 @@ location.reload();  // Refresh the page when the modal is closed
     let formattedDate = `${year}-${month}-${day}`;
     $('#edit-employee').val(employee);
     $('#edit-date').val(formattedDate);
-    $('#edit-date').attr('min', formattedDate);
+    $('#edit-date').removeAttr('min');
     $('#edit-from_location').val(from_location);
     $('#edit-to_location').val(to_location);
     $('#edit-car_type').val(car_type);
