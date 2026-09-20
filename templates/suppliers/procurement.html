@@ -5,23 +5,72 @@
 {% if user.is_authenticated %}
 <head>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <style>
+      /* Let the wide table scroll sideways instead of breaking the layout */
+      #itable1 { overflow-x: auto; }
+      #itable1 table { min-width: 800px; }
+
+      /* Search field (rendered from forms.py with class "search-input") */
+      .search-input { width: 250px; }
+      .filter-pair { display: flex; align-items: stretch; }
+
+      /* ---- Mobile ---- */
+      @media (max-width: 768px) {
+        .filter-bar { margin: 12px !important; }
+        .filter-bar .input-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          align-items: center;
+        }
+        .filter-pair span { white-space: nowrap; flex: 0 0 auto; }
+        /* drop the desktop alignment margins so controls stack cleanly */
+        .filter-bar .input-group > * {
+          margin-top: 0 !important;
+          margin-right: 0 !important;
+          margin-left: 0 !important;
+        }
+        .filter-bar p { margin: 0; }
+        /* every direct control (date pairs + the search wrapper) spans a full row */
+        .filter-bar .input-group > div { flex: 1 1 100% !important; }
+        .filter-pair { flex: 1 1 100%; }
+        .filter-pair .form-control { flex: 1 1 auto; }
+        /* Django wraps the search field in a <p>; make wrapper + <p> + input full width */
+        .filter-bar form p { width: 100%; margin: 0; }
+        .filter-bar .btn { width: 100%; border-radius: 4px !important; }
+        .search-input { width: 100% !important; box-sizing: border-box; }
+
+        /* remove the big top gap the old absolute form needed */
+        #itable1 { margin: 12px !important; }
+
+        /* count / totals row */
+        .count-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px !important; }
+        .count-row > * { margin-right: 0 !important; }
+        .count-row .form-control { max-width: none !important; flex: 1 1 50%; min-width: 45%; }
+      }
+    </style>
 </head>
 <body>
-<div class="input-group mb-3" style="margin: 10px">
-    <form method="get" class="mb-3" style="position: absolute; right: 60px;">
-    <div class="input-group">
-        <span style = "background-color: #007bff; color: white; padding: 10px 10px; margin-top: 35px; height: 50px;">Date From</span>
-        <input type="date" id="start_date" name="start_date" class="form-control" style="text-align: center; margin-right: 5%; margin-top: 35px; height: 50px;" aria-label="Date" value="{{start_date}}">
-        <span style = "background-color: #007bff; color: white; padding: 10px 10px; margin-top: 35px; height: 50px;">Date To</span>
-        <input type="date" id="end_date" name="end_date" class="form-control" style="text-align: center; margin-top: 35px; height: 50px;" aria-label="Date" value="{{end_date}}">
-        <div style="margin-top: 35px; margin-left: 30px;">
-        {{ form.as_p }}
-        </div>
-        <button style="border-radius: 0; margin-left: 15px; margin-top: 35px; height: 50px;" type="submit" name="search" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-    </div>
+<div class="filter-bar mb-3" style="margin: 10px">
+    <form method="get" class="mb-3">
+      <div class="input-group">
+          <div class="filter-pair">
+              <span style = "width: 150px; background-color: #007bff; color: white; padding: 10px 10px; margin-top: 35px; height: 50px;">Date From</span>
+              <input type="date" id="start_date" name="start_date" class="form-control" style="text-align: center; margin-right: 5%; margin-top: 35px; height: 50px;" aria-label="Date" value="{{start_date}}">
+          </div>
+          <div class="filter-pair">
+              <span style = "width: 150px; background-color: #007bff; color: white; padding: 10px 10px; margin-top: 35px; height: 50px;">Date To</span>
+              <input type="date" id="end_date" name="end_date" class="form-control" style="text-align: center; margin-top: 35px; height: 50px;" aria-label="Date" value="{{end_date}}">
+          </div>
+          <div style="margin-top: 35px; margin-left: 30px;">
+          {{ form.as_p }}
+          </div>
+          <button style="border-radius: 0; margin-left: 15px; margin-top: 35px; height: 50px;" type="submit" name="search" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+          <button style="border-radius: 0; margin-left: 15px; margin-top: 35px; height: 50px;" type="button" id="itemsReportBtn" class="btn btn-success" data-toggle="modal" data-target="#itemsModal" data-bs-toggle="modal" data-bs-target="#itemsModal"><i class="fas fa-box"></i> Purchased Items</button>
+      </div>
     </form>
 </div>
-<div id="itable1" class="scrollable-div" style="margin: 120px 30px 30px 30px;">
+<div id="itable1" class="scrollable-div" style="margin: 30px;">
     <table class="table table-striped table-borderless">
   <thead>
     <tr>
@@ -84,7 +133,7 @@
   </tbody>
 </table>
 </div>
-<div class="input-group mb-3" style="margin: 30px">
+<div class="input-group mb-3 count-row" style="margin: 30px">
     <span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">Count of Invoices</span>
     <input type="text" class="form-control" style="text-align: center; margin-right: 5%; height: 50px; max-width: 120px;" value="{{number_of_invoices}}">
     <span style = "background-color: #007bff; color: white; padding: 10px 10px; height: 50px;">Total of Amounts</span>
@@ -231,13 +280,115 @@
         </div>
     </div>
 </div>
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
+<!-- Items report modal -->
+<div class="modal fade" id="itemsModal" tabindex="-1" role="dialog" aria-labelledby="itemsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="itemsModalLabel">Purchased Items — export detailed report</h5>
+        <button type="button" class="close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group input-group-sm mb-3">
+          <span class="input-group-text">From</span>
+          <input type="date" id="item_from" class="form-control">
+          <span class="input-group-text">To</span>
+          <input type="date" id="item_to" class="form-control">
+        </div>
+        <input type="text" id="itemSearch" class="form-control mb-2" placeholder="Filter items...">
+        <ul class="list-group" id="itemsList">
+          <li class="list-group-item text-muted">Loading...</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var allItems = [];
+    var loaded = false;
+
+    function fmt(d){ return d.toISOString().split('T')[0]; }
+
+    function setDefaults(){
+        var fromEl = document.getElementById('item_from');
+        var toEl = document.getElementById('item_to');
+        if (!fromEl.value || !toEl.value) {
+            var end = new Date(), start = new Date(end);
+            start.setDate(start.getDate() - 30);
+            fromEl.value = fmt(start);
+            toEl.value = fmt(end);
+        }
+    }
+
+    function render(items){
+        var ul = document.getElementById('itemsList');
+        if (!items.length) { ul.innerHTML = '<li class="list-group-item text-muted">No items found.</li>'; return; }
+        ul.innerHTML = items.map(function (name) {
+            var li = document.createElement('li');   // build safely so names with quotes/Arabic work
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            var span = document.createElement('span'); span.textContent = name;
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-primary export-item';
+            btn.textContent = 'Export PDF';
+            btn.setAttribute('data-name', name);
+            li.appendChild(span); li.appendChild(btn);
+            return li.outerHTML;
+        }).join('');
+    }
+
+    function loadItems(){
+        var ul = document.getElementById('itemsList');
+        ul.innerHTML = '<li class="list-group-item text-muted">Loading...</li>';
+        fetch('/suppliers/procurement_items/')
+            .then(function (r) { return r.json(); })
+            .then(function (d) { allItems = d.items || []; render(allItems); })
+            .catch(function () { ul.innerHTML = '<li class="list-group-item text-danger">Failed to load.</li>'; });
+    }
+
+    // Load list + set dates when the opener is clicked (no dependence on modal events)
+    var opener = document.getElementById('itemsReportBtn');
+    if (opener) {
+        opener.addEventListener('click', function () {
+            setDefaults();
+            if (!loaded) { loaded = true; loadItems(); }
+        });
+    }
+
+    // Live filter
+    var search = document.getElementById('itemSearch');
+    if (search) {
+        search.addEventListener('input', function () {
+            var q = this.value.toLowerCase();
+            render(allItems.filter(function (n) { return n.toLowerCase().indexOf(q) >= 0; }));
+        });
+    }
+
+    // Delegated export handler (registered immediately, independent of jQuery)
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.export-item');
+        if (!btn) return;
+        var name = btn.getAttribute('data-name');
+        var f = document.getElementById('item_from').value;
+        var t = document.getElementById('item_to').value;
+        if (!f || !t) { alert('Please choose a date range.'); return; }
+
+        var url = '/suppliers/export_item/' + encodeURIComponent(f) + '/' + encodeURIComponent(t) +
+                  '/?item=' + encodeURIComponent(name);
+
+        var a = document.createElement('a');     // reliable download trigger
+        a.href = url; a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { a.remove(); }, 1000);
+    });
+});
+</script>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Select the submit button
@@ -253,77 +404,6 @@
             submitButton.click();
         });
     });
-    document.addEventListener('DOMContentLoaded', function() {
-  fetch('/drivers/fetch-pmissions/')
-    .then(response => response.json())
-    .then(data => {
-      const pmissions = data.pmissions;
-      const toastContainer = document.getElementById('toast-container');
-      pmissions.forEach(function(mission) {
-        const toastHTML = `
-          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-              <strong class="mr-auto">${mission.customer_name}</strong>
-            </div>
-            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-              From: ${mission.from_location}<br>
-              To: ${mission.to_location}<br>
-              Vehicle: ${mission.car_type} (${mission.car_num})
-            </div>
-          </div>
-        `;
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-        // Add click event to the toast to mark as read and close the toast
-        const toastElement = document.getElementById(`toast-${mission.id}`);
-        toastElement.addEventListener('click', function() {
-          markAsRead(mission.id);
-          $(toastElement).toast('hide'); // Close the toast after marking as read
-        });
-      });
-
-      // Initialize toast with autohide set to false
-      $('.toast').toast({
-        autohide: false
-      }).toast('show');  // Display all toasts without auto-hiding
-    })
-    .catch(error => {
-      console.error('Error fetching PMissions:', error);
-    });
-
-  // Mark the mission as read when clicked
-  function markAsRead(missionId) {
-    fetch(`/drivers/mark-as-read/${missionId}/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-        'Content-Type': 'application/json'
-      },
-    }).then(response => response.json())
-      .then(data => {
-        console.log(`Mission ${missionId} marked as read`);
-      })
-      .catch(error => {
-        console.error('Error marking as read:', error);
-      });
-  }
-
-  // Function to get the CSRF token
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-});
 
     function setDynamicHeight() {
         // Get the screen height

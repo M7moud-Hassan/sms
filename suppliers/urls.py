@@ -27,6 +27,8 @@ urlpatterns = [
     path('vehicles/', views.vehicles, name='vehicles'),
     path('add_vehicle/', views.add_vehicle, name="add_vehicle"),
     path('edit_vehicle/<int:id>/', views.edit_vehicle, name="edit_vehicle"),
+    path('jotrack_live/', views.jotrack_live, name='jotrack_live'),
+    path('track/<int:id>/', views.vehicle_track, name='vehicle_track'),
     path('add_attachment/', views.add_attachment, name='add_sattachment'),
     path('edit_attachment/<int:id>/', views.edit_attachment, name='edit_sattachment'),
     path('delete_attachment/<int:id>/', views.delete_attachment, name='delete_sattachment'),
@@ -40,6 +42,11 @@ urlpatterns = [
     path('vfilter/<int:id>/', views.vfilter_invoices, name='vfilter_invoices'),
     path('bfilter/<int:id>/', views.bfilter_invoices, name='bfilter_invoices'),
     path('fetch_attachments/', views.fetch_attachments, name='fetch_vattachments'),
+    path('vehicle_reports/<int:id>/<str:date_from>/<str:date_to>/',
+     views.export_vehicle_reports, name='export_vehicle_reports'),
+    path('activities/<int:id>/', views.supplier_activities, name='supplier_activities'),
+    path('procurement_items/', views.procurement_items, name='procurement_items'),
+    path('export_item/<str:date_from>/<str:date_to>/', views.export_item_report, name='export_item_report'),
 ]
 
 

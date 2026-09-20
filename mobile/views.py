@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Sum, Max, Q, F, Value as V, CharField, DecimalField
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse, Http404
 from django.urls import reverse
 import os
 import openpyxl
@@ -14,7 +14,6 @@ from django.conf import settings
 import subprocess
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse
 from django.contrib import messages
 import tempfile
 from datetime import datetime, date
@@ -294,7 +293,12 @@ def page2_1(request, number):
         serializer = Vouchers2Serializer(vouchers, data=data)  # Use partial=True for partial updates
         if serializer.is_valid():
             serializer.save()
-            item = SMission.objects.filter(Q(car_num=vouchers.car_num) & Q(receipt="Assigned")).first()
+            # Scope to THIS driver's mission, not any Assigned row with this plate —
+            # a reused chassis can be Assigned on another driver's older mission too.
+            item = (SMission.objects.filter(
+                        Q(car_num=vouchers.car_num) & Q(receipt="Assigned")
+                        & Q(mmission__driver__name=vouchers.driver_name)
+                    ).order_by('-id').first())
             if item:
                 item.receipt = "Received"
                 item.save()
@@ -414,7 +418,12 @@ def page3_1(request, number):
             serializer = Vouchers32Serializer(vouchers, data=data)
             if serializer.is_valid():
                 serializer.save()
-                item = SMission.objects.filter(Q(car_num=vouchers.car_num) & Q(receipt="Received")).first()
+                # Scope to THIS driver's mission so a reused chassis can't flip
+                # another driver's Received row to Delivered.
+                item = (SMission.objects.filter(
+                            Q(car_num=vouchers.car_num) & Q(receipt="Received")
+                            & Q(mmission__driver__name=vouchers.driver_name)
+                        ).order_by('-id').first())
                 if item:
                     item.receipt = "Delivered"
                     item.save()
@@ -701,7 +710,11 @@ def export_invoice(request, phone, driver_name, vehicle_number):
             voucher.save()
             from_location = voucher.receipt_from_location
             to_location = voucher.receipt_to_location
-            item = SMission.objects.filter(Q(car_num=voucher.car_num) & Q(receipt="Delivered") & Q(mmission__driver__name=decoded_driver_name)).first()
+            cost_center_name = ""
+            item = (SMission.objects.filter(
+                        Q(car_num=voucher.car_num) & Q(receipt="Delivered")
+                        & Q(mmission__driver__name=decoded_driver_name)
+                    ).order_by('-id').first())
             if item:
                 item.receipt = "Invoiced"
                 item.save()
@@ -710,6 +723,8 @@ def export_invoice(request, phone, driver_name, vehicle_number):
                 if pmission:
                     from_location = pmission.from_location
                     to_location = pmission.to_location
+                    if pmission.cost_center:
+                        cost_center_name = pmission.cost_center.name
                 else:
                     from_location = mission.from_location
                     to_location = mission.to_location
@@ -720,6 +735,8 @@ def export_invoice(request, phone, driver_name, vehicle_number):
                 new_invoice.samount = mission.scost
                 new_invoice.save()
             description = f"نقل مركبة للعميل نوع {voucher.car_mark} لون {voucher.car_color} من {from_location} إلى {to_location}"
+            if cost_center_name:
+                description = f"{description} - {cost_center_name}"
             description = f"\u202B{description}\u202C"
             adinar = udinar = int(amount / items_count)
             afils = ufils = int(round(((amount / items_count) - udinar) * 100))
@@ -748,28 +765,103 @@ def export_invoice(request, phone, driver_name, vehicle_number):
     # Load the existing workbook (source file)
     wb = openpyxl.load_workbook(source_excel_path)
     ws = wb.active
+
+    # --- same layout as send_invoice: items 19-30, footer 31-38 ---
+    from copy import copy
+    from openpyxl.utils import range_boundaries
+    from openpyxl.utils.cell import coordinate_from_string
+
+    ITEM_START    = 18
+    FOOTER_START  = 30
+    MAX_ITEM_ROWS = FOOTER_START - ITEM_START  # 12
+    TEMPLATE_ROW  = FOOTER_START - 1           # 29
+    extra = max(0, len(items) - MAX_ITEM_ROWS)
+
+    def fcell(ref):
+        col, row = coordinate_from_string(ref)
+        return f"{col}{row + extra if row >= FOOTER_START else row}"
+
+    if extra:
+        footer_merges  = [str(r) for r in list(ws.merged_cells.ranges)
+                          if r.min_row >= FOOTER_START]
+        footer_heights = {r: ws.row_dimensions[r].height
+                          for r in range(FOOTER_START, ws.max_row + 1)}
+        for r in footer_merges:
+            ws.unmerge_cells(r)
+        ws.insert_rows(FOOTER_START, amount=extra)
+        for r in footer_merges:
+            c1, r1, c2, r2 = range_boundaries(r)
+            ws.merge_cells(start_row=r1 + extra, start_column=c1,
+                           end_row=r2 + extra, end_column=c2)
+        for r, h in footer_heights.items():
+            if h is not None:
+                ws.row_dimensions[r + extra].height = h
+        for new_row in range(FOOTER_START, FOOTER_START + extra):
+            src_h = ws.row_dimensions[TEMPLATE_ROW].height
+            if src_h is not None:
+                ws.row_dimensions[new_row].height = src_h
+            for col in range(1, 10):          # style BEFORE merging
+                src = ws.cell(row=TEMPLATE_ROW, column=col)
+                dst = ws.cell(row=new_row, column=col)
+                if src.has_style:
+                    dst.font          = copy(src.font)
+                    dst.border        = copy(src.border)
+                    dst.fill          = copy(src.fill)
+                    dst.alignment     = copy(src.alignment)
+                    dst.protection    = copy(src.protection)
+                    dst.number_format = src.number_format
+            ws.merge_cells(start_row=new_row, start_column=4,
+                           end_row=new_row, end_column=7)
+
+    # signature: keep aspect ratio, place at (shifted) B33
     img = OpenpyxlImage(image_path)
-    ws.add_image(img, 'B33')
+    BOX_W, BOX_H = 170, 85   # pixels — tweak to taste
+    if img.width and img.height:
+        scale = min(BOX_W / img.width, BOX_H / img.height)
+        img.width  = int(img.width  * scale)
+        img.height = int(img.height * scale)
+    ws.add_image(img, fcell('B34'))
     # Fetch data from the model
-    ws['A6'] = invoice.number
-    ws['E7'] = invoice.type
-    ws['G8'] = invoice.date
+    ws['A6']  = invoice.number
+    ws['E7']  = invoice.type
+    ws['G8']  = invoice.date
     ws['B10'] = customer_name
-    ws['A12'] = invoice.car
-    ws['B30'] = invoice.samount
-    ws['H31'] = invoice.dinar
-    ws['I31'] = invoice.fils
-    ws['E33'] = recipient_to_name
-    ws['E34'] = sub_customer
-    ws['E35'] = invoice.driver.name
-    ws['E37'] = invoice.notes
-    for idx, item in enumerate(items, start=18):
+    ws['A12'] = invoice.car             
+
+    # dynamic height for the VIN list so it isn't clipped
+    from openpyxl.styles import Alignment
+    a12 = ws['A12']
+    a12.alignment = Alignment(wrap_text=True,
+                              horizontal=a12.alignment.horizontal or 'center',
+                              vertical='center')
+    vin_count = len([v for v in (invoice.car or '').replace('،', ',').split(',') if v.strip()])
+    VINS_PER_LINE = 4
+    lines = max(1, -(-vin_count // VINS_PER_LINE))
+    ws.row_dimensions[12].height = max(40.05, lines * 15 + 6)
+
+    ws[fcell('B30')] = invoice.samount
+    ws[fcell('H31')] = invoice.dinar
+    ws[fcell('I31')] = invoice.fils
+    ws[fcell('E33')] = recipient_to_name
+    ws[fcell('E34')] = sub_customer
+    ws[fcell('E35')] = invoice.driver.name
+    ws[fcell('E37')] = invoice.notes                
+
+    for idx, item in enumerate(items, start=ITEM_START):
         ws.cell(row=idx, column=1, value=item.udinar)
         ws.cell(row=idx, column=2, value=item.ufils)
         ws.cell(row=idx, column=3, value=item.qty)
         ws.cell(row=idx, column=4, value=item.description)
         ws.cell(row=idx, column=8, value=item.adinar)
         ws.cell(row=idx, column=9, value=item.afils)
+    
+    if extra:
+        ws.print_title_rows = '1:17'
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 2
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.print_area = f'A1:I{ws.max_row}'
+    
     wb.save(output_excel_path)
     try:
         output_pdf_path = os.path.splitext(output_excel_path)[0] + '.pdf'

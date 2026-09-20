@@ -2,6 +2,9 @@
 {% load static %}
 <html>
 <head>
+    <title>SMT</title>
+      <!-- Favicon -->
+    <link rel="shortcut icon" type="image/x-icon" href="{% static 'image/logo.png' %}">
     <!-- Include Bootstrap CSS -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <!-- Include MDBootstrap CSS -->
@@ -139,7 +142,28 @@
             <label class="form-label" for="notes" style="font-weight: bold;">ملاحظات إضافية</label>
         </div>
     </div>
+
 </div>
+
+<div class="row mb-4">
+    <div class="col-md-9">
+      <div class="form-outline">
+        <select name="cost_center" id="cost_center" class="form-control" dir="rtl" style="font-weight: bold; border: 1px solid #ced4da; border-radius: 4px;">
+          <option value="">بدون مركز تكلفة (اختياري)</option>
+          {% for cc in cost_centers %}
+          <option value="{{ cc.id }}">{{ cc.name }}</option>
+          {% endfor %}
+        </select>
+        <label class="form-label" for="cost_center" style="font-weight: bold;">مركز التكلفة</label>
+      </div>
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <a href="#" class="btn btn-outline-primary btn-block" data-toggle="modal" data-target="#costCenterModal" style="font-weight: bold;">
+        <i class="fas fa-plus"></i> إدارة مراكز التكلفة
+      </a>
+    </div>
+  </div>
+
 </form>
 <form action="{% url 'import_excel' customer.id %}" id="importForm" method="post" enctype="multipart/form-data">
     {% csrf_token %}
@@ -148,21 +172,22 @@
 <div id="itable1" class="scrollable-div">
     <table class="table table-striped table-borderless">
   <thead class="table-head-primary">
-    <tr>
-      <th style="min-width: 210px;">إجراءات</th>
-      <th>ملاحظات إضافية</th>
-      <th>لون المركبة</th>
-      <th>رقم لوحة المركبة</th>
-      <th>العلامة التجارية للمركبة</th>
-      <th>نوع المركبة</th>
-      <th>تسليم في المكان</th>
-      <th>نقل من المكان</th>
-      <th>تاريخ نقل المركبة</th>
-      <th>اسم الموظف المسئول</th>
-      <th>القسم طالب الخدمة</th>
-      <th>حالة الطلب</th>
-    </tr>
-  </thead>
+  <tr>
+    <th style="min-width: 210px;">إجراءات</th>
+    <th>ملاحظات إضافية</th>
+    <th>مركز التكلفة</th>
+    <th>لون المركبة</th>
+    <th>رقم لوحة المركبة</th>
+    <th>العلامة التجارية للمركبة</th>
+    <th>نوع المركبة</th>
+    <th>تسليم في المكان</th>
+    <th>نقل من المكان</th>
+    <th>تاريخ نقل المركبة</th>
+    <th>اسم الموظف المسئول</th>
+    <th>القسم طالب الخدمة</th>
+    <th>حالة الطلب</th>
+  </tr>
+</thead>
   <tbody>
   {% for pmission in pmissions %}
   <tr>
@@ -172,11 +197,26 @@
     <i class="fas fa-trash-alt"></i> حذف
   </button>
   <!-- Edit Button with Icon -->
-  <button style="width: 70px; height: 36px;" class="btn btn-sm btn-primary edit-button" data-toggle="modal" data-target="#editModal" data-id="{{ pmission.id }}" data-employee="{{ pmission.employee }}" data-date="{{ pmission.date }}" data-from_location="{{ pmission.from_location }}" data-to_location="{{ pmission.to_location }}" data-car_type="{{ pmission.car_type }}" data-car_mark="{{ pmission.car_mark }}" data-car_num="{{ pmission.car_num }}" data-car_color="{{ pmission.car_color }}" data-notes="{{ pmission.notes }}" data-customer="{{ customer.id }}">
-    <i class="fas fa-edit"></i> تعديل
-  </button>
+  <button style="width: 70px; height: 36px;" class="btn btn-sm btn-primary edit-button" 
+  data-toggle="modal" 
+  data-target="#editModal" 
+  data-id="{{ pmission.id }}" 
+  data-employee="{{ pmission.employee }}" 
+  data-date="{{ pmission.date }}" 
+  data-from_location="{{ pmission.from_location }}" 
+  data-to_location="{{ pmission.to_location }}" 
+  data-car_type="{{ pmission.car_type }}" 
+  data-car_mark="{{ pmission.car_mark }}" 
+  data-car_num="{{ pmission.car_num }}" 
+  data-car_color="{{ pmission.car_color }}" 
+  data-notes="{{ pmission.notes }}" 
+  data-cost_center="{{ pmission.cost_center.id|default:'' }}"
+  data-customer="{{ customer.id }}">
+  <i class="fas fa-edit"></i> تعديل
+</button>
 </td>
     <td class="align-middle" style="text-align: center;">{{ pmission.notes|default:'' }}</td>
+    <td class="align-middle" style="text-align: center;">{{ pmission.cost_center.name|default:'' }}</td> 
     <td class="align-middle" style="text-align: center;">{{ pmission.car_color }}</td>
     <td class="align-middle" style="text-align: center;">{{ pmission.car_num }}</td>
     <td class="align-middle" style="text-align: center;">{{ pmission.car_mark }}</td>
@@ -266,6 +306,15 @@
                             <label style="color: darkblue; font-weight: bold;" for="edit-notes">ملاحظات إضافية</label>
                             <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="text" class="form-control" autocomplete="off" dir="rtl" id="edit-notes" name="notes">
                         </div>
+                        <div class="form-group">
+                            <label style="color: darkblue; font-weight: bold;" for="edit-cost_center">مركز التكلفة</label>
+                            <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold; border: 1px solid #ced4da; border-radius: 4px;" class="form-select" id="edit-cost_center" name="cost_center">
+                                <option value="">بدون مركز تكلفة</option>
+                                {% for cc in cost_centers %}
+                                <option value="{{ cc.id }}">{{ cc.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">إغلاق</button>
                         <button type="submit" class="btn btn-primary">حفظ التغييرات</button>
@@ -299,6 +348,40 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="costCenterModal" tabindex="-1" role="dialog" aria-labelledby="costCenterModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="costCenterModalLabel">مراكز التكلفة</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body" style="background-color: whitesmoke;">
+                <form id="costCenterForm" class="mb-3" data-add-url="{% url 'add_cost_center' customer.id %}">
+                    {% csrf_token %}
+                    <label style="color: darkblue; font-weight: bold;" for="cost_center_name">اسم مركز التكلفة</label>
+                    <div class="input-group">
+                        <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold; border: 1px solid #ced4da;" type="text" class="form-control" autocomplete="off" dir="rtl" id="cost_center_name" name="name" required>
+                        <button type="submit" class="btn btn-primary">إضافة</button>
+                    </div>
+                </form>
+                <ul class="list-group" id="costCenterList" dir="rtl" data-delete-url="{% url 'delete_cost_center' 0 customer.id %}">
+                    {% for cc in cost_centers %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ cc.id }}">
+                        <span>{{ cc.name }}</span>
+                        <button type="button" class="btn btn-sm btn-danger cc-delete" data-id="{{ cc.id }}">حذف</button>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-muted" id="costCenterEmpty">لا توجد مراكز تكلفة بعد</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Error Modal -->
 <div class="modal fade" id="errorModal" tabindex="-1" role="dialog" aria-labelledby="errorModalLabel" aria-hidden="true">
@@ -437,7 +520,7 @@ location.reload();  // Refresh the page when the modal is closed
   // Format the date as YYYY-MM-DD
   var formattedDate = today.toISOString().slice(0, 10);
   document.getElementById('date').value = formattedDate;
-  document.getElementById('date').min = formattedDate;
+  // document.getElementById('date').min = formattedDate;
     $(document).on('click', '.edit-button', function() {
     var id = $(this).data('id');
     var employee = $(this).data('employee');
@@ -449,6 +532,7 @@ location.reload();  // Refresh the page when the modal is closed
     var car_num = $(this).data('car_num');
     var car_color = $(this).data('car_color');
     var notes = $(this).data('notes');
+    var cost_center = $(this).data('cost_center');
     let dateObj = new Date(date);
     // Format the Date object to "yyyy-mm-dd"
     let year = dateObj.getFullYear();
@@ -457,7 +541,7 @@ location.reload();  // Refresh the page when the modal is closed
     let formattedDate = `${year}-${month}-${day}`;
     $('#edit-employee').val(employee);
     $('#edit-date').val(formattedDate);
-    $('#edit-date').attr('min', formattedDate);
+    $('#edit-date').removeAttr('min');
     $('#edit-from_location').val(from_location);
     $('#edit-to_location').val(to_location);
     $('#edit-car_type').val(car_type);
@@ -465,6 +549,7 @@ location.reload();  // Refresh the page when the modal is closed
     $('#edit-car_num').val(car_num);
     $('#edit-car_color').val(car_color);
     $('#edit-notes').val(notes);
+    $('#edit-cost_center').val(cost_center ? cost_center : '');
     var action = $('#editForm').attr('action').replace('0', id);
     $('#editForm').attr('action', action);
     });
@@ -472,6 +557,69 @@ location.reload();  // Refresh the page when the modal is closed
     var id = $(this).data('id');
     var action = $('#deleteForm').attr('action').replace('0', id);
     $('#deleteForm').attr('action', action);
+    });
+
+    // ---- Cost centers: add/delete inside the modal without leaving the page ----
+    var ccChanged = false;
+    var $ccForm = $('#costCenterForm');
+    var $ccList = $('#costCenterList');
+    var ccToken = $ccForm.find('input[name="csrfmiddlewaretoken"]').val();
+
+    $ccForm.on('submit', function (e) {
+        e.preventDefault();
+        var name = $('#cost_center_name').val().trim();
+        if (!name) return;
+        $.ajax({
+            url: $ccForm.data('add-url'),
+            method: 'POST',
+            data: { name: name, csrfmiddlewaretoken: ccToken },
+            success: function (res) {
+                if (res.success) {
+                    $('#costCenterEmpty').remove();
+                    $ccList.append(
+                        '<li class="list-group-item d-flex justify-content-between align-items-center" data-id="' + res.id + '">' +
+                        '<span>' + res.name + '</span>' +
+                        '<button type="button" class="btn btn-sm btn-danger cc-delete" data-id="' + res.id + '">حذف</button>' +
+                        '</li>'
+                    );
+                    // keep the two dropdowns in sync immediately
+                    var opt = '<option value="' + res.id + '">' + res.name + '</option>';
+                    $('#cost_center, #edit-cost_center').append(opt);
+                    $('#cost_center_name').val('');
+                    ccChanged = true;
+                } else {
+                    alert(res.error || 'خطأ');
+                }
+            },
+            error: function (xhr) {
+                alert((xhr.responseJSON && xhr.responseJSON.error) || 'خطأ');
+            }
+        });
+    });
+
+    $ccList.on('click', '.cc-delete', function () {
+        var id = $(this).data('id');
+        var $li = $(this).closest('li');
+        $.ajax({
+            url: $ccList.data('delete-url').replace('0', id),
+            method: 'POST',
+            data: { csrfmiddlewaretoken: ccToken },
+            success: function (res) {
+                if (res.success) {
+                    $li.remove();
+                    $('#cost_center option[value="' + id + '"], #edit-cost_center option[value="' + id + '"]').remove();
+                    if ($ccList.children('li').length === 0) {
+                        $ccList.append('<li class="list-group-item text-muted" id="costCenterEmpty">لا توجد مراكز تكلفة بعد</li>');
+                    }
+                    ccChanged = true;
+                }
+            }
+        });
+    });
+
+    // Refresh once the modal closes, only if something actually changed
+    $('#costCenterModal').on('hidden.bs.modal', function () {
+        if (ccChanged) location.reload();
     });
 </script>
 </body>

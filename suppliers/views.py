@@ -5,10 +5,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Sum, Max, Q, F, Value as V, CharField, DecimalField
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse, Http404
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 import os
+import io
 import openpyxl
 from django.conf import settings
 import subprocess
@@ -21,7 +22,9 @@ import pytz
 from django.utils.timezone import localtime
 from datetime import datetime, timedelta, date
 from django.contrib.auth.models import User
+from mobile.jotrack import JoTrackClient, JoTrackError
 from .forms import SearchForm
+from customers import customer_reports as cr   # same module as the vehicle reports
 from .models import Supplier, Treasury, MainItems, Invoices, Items, Papers
 from mobile.models import Used_Vehicle, Auto_Oil, Fuel_Filling
 from invoices.models import Invoices as Inv
@@ -53,7 +56,11 @@ def index(request):
                 query_value = float(query)
                 suppliers = suppliers.filter(balance__gte=query_value)
             except:
-                suppliers = suppliers.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(mail__icontains=query) | Q(notes__icontains=query))
+                suppliers = suppliers.filter(
+                    Q(name__icontains=query) | Q(phone__icontains=query) |
+                    Q(mail__icontains=query) | Q(notes__icontains=query) |
+                    Q(invoices__items__item__icontains=query)
+                ).distinct()
     #amman_tz = pytz.timezone('Asia/Amman')
     #adjusted_suppliers = []
     #for supplier in suppliers:
@@ -131,12 +138,17 @@ def supplier_details(request, id):
         'created_at_annotated'
     )
     combined_entries = invoices.union(treasury).order_by('created_at_annotated')
+    purchased_items = Items.objects.filter(invoice__supplier__id=id).order_by('-created_at').values(
+        'item', 'description', 'qty', 'amount', 'tamount',
+        'invoice__number', 'invoice__date', 'vehicle__vehicle_number'
+    )
     context = {
         'active_tab': 'suppliers',
         'id': id,
         'supplier': supplier,
         'papers': papers,
         'combined_entries': combined_entries,
+        'purchased_items': purchased_items,
     }
     if request.method == "POST":
         username = request.POST['username']
@@ -150,6 +162,29 @@ def supplier_details(request, id):
             return redirect('suppliers_index')
     else:
         return render(request, "suppliers/details.html", context)
+
+def supplier_activities(request, id):
+    amman_tz = pytz.timezone('Asia/Amman')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+
+    invoices = Invoices.objects.filter(supplier__id=id)
+    treasury = Treasury.objects.filter(supplier__id=id)
+    if date_from and date_to:
+        invoices = invoices.filter(date__range=(date_from, date_to))
+        treasury = treasury.filter(created_at__date__range=(date_from, date_to))
+
+    entries = []
+    for inv in invoices.values('number', 'tamount', 'created_at'):
+        entries.append({'account': 'Created invoice', 'number': inv['number'],
+                        'amount': str(inv['tamount']),
+                        'created_at': localtime(inv['created_at'], amman_tz).isoformat()})
+    for t in treasury.values('number', 'amount', 'created_at'):
+        entries.append({'account': 'Paid to treasury', 'number': t['number'],
+                        'amount': str(t['amount']),
+                        'created_at': localtime(t['created_at'], amman_tz).isoformat()})
+    entries.sort(key=lambda e: e['created_at'])
+    return JsonResponse({'entries': entries}, safe=False)
 
 def vehicle_details(request, id):
     vehicle = Used_Vehicle.objects.filter(id=id).first()
@@ -509,6 +544,44 @@ def pocurement(request):
             return render(request, "suppliers/procurement.html", context)
 
 @login_required
+def procurement_items(request):
+    """Distinct item names across all invoices (for the modal list)."""
+    items = list(Items.objects.exclude(item__isnull=True).exclude(item__exact='')
+                 .values_list('item', flat=True).distinct().order_by('item'))
+    return JsonResponse({'items': items})
+
+@login_required
+def export_item_report(request, date_from, date_to):
+    """Detailed purchase report for one item across ALL suppliers."""
+    item_name = request.GET.get('item', '').strip()
+    if not item_name:
+        raise Http404("No item specified")
+
+    qs = Items.objects.filter(
+        item=item_name, invoice__date__range=(date_from, date_to)
+    ).order_by('invoice__date').values(
+        'invoice__date', 'invoice__supplier__name', 'invoice__number',
+        'qty', 'amount', 'tamount', 'vehicle__vehicle_number'
+    )
+    rows = [{
+        'date': r['invoice__date'],
+        'supplier_name': r['invoice__supplier__name'],
+        'invoice_number': r['invoice__number'],
+        'qty': r['qty'],
+        'unit_cost': r['amount'],
+        'line_total': r['tamount'],
+        'vehicle': r['vehicle__vehicle_number'] or '',
+    } for r in qs]
+
+    buf = io.BytesIO()
+    cr.build_item_report_pdf(buf, item_name, date_from, date_to, rows)
+    buf.seek(0)
+    response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Item_{item_name}.pdf"'
+    response.set_cookie('export_download_done', 'true', max_age=60)
+    return response
+
+@login_required
 def vehicles(request):
     vehicles = Used_Vehicle.objects.all()
     form = SearchForm(request.GET)
@@ -545,6 +618,49 @@ def vehicles(request):
             return redirect('pmissions_index')
         else:
             return render(request, "suppliers/vehicles.html", context)
+
+@login_required
+def jotrack_live(request):
+    """Location-only per vehicle (endpoint has no speed/status)."""
+    from mobile.jotrack import JoTrackClient
+    devices = {}
+    qs = Used_Vehicle.objects.exclude(jotrack_terminal__isnull=True).exclude(jotrack_terminal="")
+    for v in qs:
+        try:
+            d = JoTrackClient.get_last_location(v.jotrack_terminal.strip())
+        except Exception:
+            d = None
+        if d:
+            devices[v.vehicle_number] = {
+                "lat": d["lat"], "lng": d["lng"], "address": d["address"],
+            }
+    return JsonResponse({"ok": True, "devices": devices})
+
+@login_required
+def vehicle_track(request, id):
+    from mobile.jotrack import JoTrackClient, JoTrackError
+    vehicle = get_object_or_404(Used_Vehicle, id=id)
+    key = (vehicle.jotrack_terminal or "").strip()
+    if not key:
+        return JsonResponse({"ok": False,
+                             "error": "No terminal id set for this vehicle."}, status=404)
+    try:
+        d = JoTrackClient.get_last_location(key)
+    except JoTrackError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=502)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"JoTrack unavailable: {e}"}, status=502)
+
+    if not d:
+        return JsonResponse({"ok": False,
+                             "error": f"JoTrack returned no location for terminal {key}."}, status=404)
+    return JsonResponse({
+        "ok": True,
+        "number": vehicle.vehicle_number,
+        "lat": d["lat"], "lng": d["lng"],
+        "address": d["address"],
+        "maps_url": f"https://www.google.com/maps?q={d['lat']},{d['lng']}",
+    })
 
 @login_required
 def edit_invoice(request, id):
@@ -591,15 +707,16 @@ def add_vehicle(request):
         fuel = request.POST.get('fuel')
         air = request.POST.get('air')
         notes = request.POST.get('notes')
+        jotrack_terminal = (request.POST.get('jotrack_terminal') or '').strip() or None
         system_user = request.user.username
         vehicle_image = request.FILES.get('vehicle_image')
         if vehicle_image:
             fs = FileSystemStorage()
             vehicle_image_name = fs.save(vehicle_image.name, vehicle_image)
             # Save to the database
-            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user, image=vehicle_image_name)
+            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user, image=vehicle_image_name, jotrack_terminal=jotrack_terminal)
         else:
-            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user)
+            Used_Vehicle.objects.create(vehicle_number=vehicle_number, type=vehicle_type, date=service_date, balance=0.0, status=status, default_oil_diff=oil, default_fuel_filter_diff=fuel, default_air_filter_diff=air, notes=notes, created_by=system_user, jotrack_terminal=jotrack_terminal)
     return redirect('vehicles')
 
 @login_required
@@ -614,6 +731,7 @@ def edit_vehicle(request, id):
         vehicle.default_fuel_filter_diff = request.POST.get('fuel')
         vehicle.default_air_filter_diff = request.POST.get('air')
         vehicle.notes = request.POST.get('notes')
+        vehicle.jotrack_terminal = (request.POST.get('jotrack_terminal') or '').strip() or None
         vehicle_image = request.FILES.get('vehicle_image')
         if vehicle_image:
             fs = FileSystemStorage()
@@ -792,76 +910,74 @@ def export_profit(request, id, date_from, date_to):
 def export_treasury(request, id, date_from, date_to):
     supplier = get_object_or_404(Supplier, id=id)
     supplier_name = supplier.name
-    invoices = Invoices.objects.filter(Q(supplier__id=id) & Q(type="ذمم") & (Q(date__range=(date_from, date_to)) | Q(tamount__gt=F('paid')))).annotate(
+    amman_tz = pytz.timezone('Asia/Amman')
+
+    # ---- account statement (same combined invoices + treasury as before) ----
+    invoices = Invoices.objects.filter(
+        Q(supplier__id=id) & Q(type="ذمم") &
+        (Q(date__range=(date_from, date_to)) | Q(tamount__gt=F('paid')))
+    ).annotate(
         account=V('فاتورة', output_field=CharField()),
         number_annotated=F('number'),
         amount_annotated=F('tamount'),
-        created_at_annotated=F('created_at')
-    ).values(
-        'account',
-        'number_annotated',
-        'amount_annotated',
-        'created_at_annotated'
-    )
-    treasury = Treasury.objects.filter(Q(supplier__id=id) & (Q(invoice__date__range=(date_from, date_to)) | Q(invoice__tamount__gt=F('invoice__paid')))).annotate(
+        created_at_annotated=F('created_at'),
+    ).values('account', 'number_annotated', 'amount_annotated', 'created_at_annotated')
+
+    treasury = Treasury.objects.filter(
+        Q(supplier__id=id) &
+        (Q(invoice__date__range=(date_from, date_to)) | Q(invoice__tamount__gt=F('invoice__paid')))
+    ).annotate(
         account=V('سداد', output_field=CharField()),
         number_annotated=F('invoice__number'),
         amount_annotated=F('amount'),
-        created_at_annotated=F('created_at')
-    ).values(
-        'account',
-        'number_annotated',
-        'amount_annotated',
-        'created_at_annotated'
-    )
-    combined_entries = invoices.union(treasury).order_by('created_at_annotated')
-    source_excel_path = os.path.join(settings.BASE_DIR, 'excel_templates', 'Supplier Account Sheet.xlsx')
-    output_excel_path = f"{os.path.splitext(source_excel_path)[0]}_{supplier_name}.xlsx"
-    # Load the existing workbook (source file)
-    wb = openpyxl.load_workbook(source_excel_path)
-    ws = wb.active
-    cell = ws.cell(row=2, column=1)
-    cell.value = "كشف حركة الحساب الخاص بالمورد/ " + supplier_name
-    white_fill = openpyxl.styles.PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-    for row in range(4, 33428):
-        ws.row_dimensions[row].hidden = False
-    for row in ws.iter_rows(min_row=4, max_row=33428, max_col=4):
-        for cell in row:
-            cell.value = None
-            cell.fill = white_fill
-    idx = start_row = 4
-    yellow_fill = openpyxl.styles.PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    amman_tz = pytz.timezone('Asia/Amman')
-    for idx, item in enumerate(combined_entries, start=start_row):
-        item['created_at_annotated'] = localtime(item['created_at_annotated'], amman_tz)
-        ws.cell(row=idx, column=1, value=item['account'])
-        ws.cell(row=idx, column=2, value=item['number_annotated'])
-        ws.cell(row=idx, column=3, value=item['amount_annotated'])
-        ws.cell(row=idx, column=4, value=item['created_at_annotated'].replace(tzinfo=None))
-        if item['account'] == "سداد":
-            for col in range(1, 5):  # Assuming you have data in columns 1 to 4
-                ws.cell(row=idx, column=col).fill = yellow_fill
-    last_data_row = idx + 1
-    for value in range(last_data_row, 33428):
-        ws.row_dimensions[value].hidden = True
-    wb.save(output_excel_path)
-    try:
-        output_pdf_path = f"{os.path.splitext(output_excel_path)[0]}.pdf"
-        subprocess.run(["libreoffice", "--headless", "--convert-to", "pdf", output_excel_path, '--outdir', os.path.dirname(output_pdf_path)], check=True)
-        zip_path = f"{os.path.splitext(output_excel_path)[0]}.zip"
-        with zipfile.ZipFile(zip_path, 'w') as zipf:
-            zipf.write(output_excel_path, os.path.basename(output_excel_path))
-            zipf.write(output_pdf_path, os.path.basename(output_pdf_path))
-        if os.path.exists(zip_path):
-            with open(zip_path, 'rb') as f:
-                response = HttpResponse(f.read(), content_type='application/zip')
-                response['Content-Disposition'] = f'attachment; filename="Supplier_Report_{id}.zip"'
-                return response
+        created_at_annotated=F('created_at'),
+    ).values('account', 'number_annotated', 'amount_annotated', 'created_at_annotated')
+
+    combined = invoices.union(treasury).order_by('created_at_annotated')
+    entries = []
+    total_inv = 0.0
+    total_pay = 0.0
+    for e in combined:
+        entries.append({
+            'account': e['account'],
+            'number': e['number_annotated'],
+            'amount': e['amount_annotated'],
+            'created_at': localtime(e['created_at_annotated'], amman_tz),
+        })
+        if e['account'] == "فاتورة":
+            total_inv += float(e['amount_annotated'] or 0)
         else:
-            raise Http404("ZIP file not found")
-    except Exception as e:
-        print("Error:", e)
-        raise Http404("An error occurred while generating the files.")
+            total_pay += float(e['amount_annotated'] or 0)
+    required_amount = total_inv - total_pay
+
+    # ---- detailed supplier invoices over the period ----
+    inv_rows = list(Invoices.objects.filter(
+        supplier__id=id, date__range=(date_from, date_to)
+    ).order_by('number').values('number', 'date', 'type', 'tamount', 'paid', 'notes'))
+
+    from . import supplier_reports_xlsx as sx
+    from .report_xlsx import deliver
+
+    fmt = request.GET.get('format', 'pdf')
+    available = {
+        "account_statement": ("account_statement",
+            lambda b: cr.build_account_statement_pdf(b, supplier_name, date_from, date_to,
+                                                     entries, total_inv, total_pay, required_amount),
+            lambda b: sx.build_account_statement_xlsx(b, supplier_name, date_from, date_to,
+                                                      entries, total_inv, total_pay, required_amount)),
+        "invoices": ("supplier_invoices",
+            lambda b: cr.build_supplier_invoices_pdf(b, supplier_name, date_from, date_to, inv_rows),
+            lambda b: sx.build_supplier_invoices_xlsx(b, supplier_name, date_from, date_to, inv_rows)),
+    }
+
+    selected = [s.strip() for s in request.GET.get('reports', '').split(',') if s.strip()]
+    if not selected:
+        selected = list(available.keys())
+    chosen = [available[k] for k in selected if k in available]
+    if not chosen:
+        raise Http404("No valid report selected")
+
+    return deliver(request, chosen, fmt, zip_basename=f"Supplier_Reports_{supplier_name}")
 
 @login_required
 def view_att(request, id):
@@ -970,7 +1086,8 @@ def vfilter_invoices(request, id):
             'maintenance_center': oil.maintenance_center,
             'diesel_filter': oil.diesel_filter,
             'air_filter': oil.air_filter,
-            'created_at': oil.created_at
+            'created_at': oil.created_at,
+            'meter_image': oil.meter_image.url if oil.meter_image else None
         })
     fuels = Fuel_Filling.objects.filter(Q(vehicle__id=id) & Q(created_at__range=(date_from, date_to))).order_by('created_at')
     fuels_data = []
@@ -981,7 +1098,8 @@ def vfilter_invoices(request, id):
             'vehicle_meter': fuel.vehicle_meter,
             'litres': fuel.litres,
             'amount': fuel.amount,
-            'created_at': fuel.created_at
+            'created_at': fuel.created_at,
+            'meter_image': fuel.meter_image.url if fuel.meter_image else None
         })
     oils_count = oils.count()
     fuels_count = fuels.count()
@@ -1060,3 +1178,96 @@ def fetch_attachments(request):
         'diesel_filter_attachments': diesel_filter_attachments_list,
         'air_filter_attachments': air_filter_attachments_list
     })
+
+@login_required
+def export_vehicle_reports(request, id, date_from, date_to):
+    vehicle = get_object_or_404(Used_Vehicle, id=id)
+    vehicle_number = vehicle.vehicle_number
+    amman_tz = pytz.timezone('Asia/Amman')
+
+    # ---- date window (inclusive end, same convention as vfilter) ----
+    d_from = datetime.strptime(date_from, '%Y-%m-%d')
+    d_to = datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)
+
+    # ---- REVENUE: customer invoices for this vehicle (same source as bfilter) ----
+    revenue_rows = [{
+        'number': r['number'],
+        'date': r['date'],
+        'customer_name': r['require_id__name'],
+        'amount': r['tamount'],
+    } for r in Inv.objects.filter(
+        vehicle__id=id, date__range=(date_from, date_to)
+    ).order_by('created_at').values('number', 'date', 'require_id__name', 'tamount')]
+
+    # ---- EXPENSES: procurement lines for this vehicle (same source as bfilter) ----
+    expenses_rows = [{
+        'number': r['invoice__number'],
+        'date': r['invoice__date'],
+        'supplier_name': r['invoice__supplier__name'],
+        'description': r.get('description') or '',
+        'amount': r['tamount'],
+    } for r in Items.objects.filter(
+        vehicle__id=id, invoice__date__range=(date_from, date_to)
+    ).order_by('created_at').values(
+        'invoice__number', 'invoice__date', 'invoice__supplier__name',
+        'description', 'tamount'
+    )]
+
+    # ---- FUEL CONSUMPTION: from Fuel_Filling odometer + litres ----
+    fills = Fuel_Filling.objects.filter(
+        vehicle__id=id, created_at__range=(d_from, d_to)
+    ).order_by('created_at', 'vehicle_meter')
+    segments = []
+    prev_odo = None
+    for f in fills:
+        segments.append({
+            'date': localtime(f.created_at, amman_tz),
+            'odo_prev': prev_odo,
+            'odo_curr': f.vehicle_meter,
+            'litres': f.litres,
+        })
+        prev_odo = f.vehicle_meter
+
+    # ---- MAINTENANCE PARTS: itemized parts for this vehicle (from Items) ----
+    # part_name = item, unit_cost = amount, qty = qty; the builder multiplies
+    # qty x unit_cost for the line cost (matches the stored tamount).
+    # maintenance_center uses the supplier (the workshop the part came from).
+    maintenance_rows = [{
+        'date': r['invoice__date'],
+        'maintenance_center': r['invoice__supplier__name'],
+        'part_name': r['item'],
+        'qty': r['qty'],
+        'unit_cost': r['amount'],
+    } for r in Items.objects.filter(
+        vehicle__id=id, invoice__date__range=(date_from, date_to)
+    ).order_by('created_at').values(
+        'invoice__date', 'invoice__supplier__name', 'item', 'qty', 'amount'
+    )]
+
+    from . import vehicle_reports_xlsx as vx
+    from .report_xlsx import deliver
+
+    fmt = request.GET.get('format', 'pdf')
+    available = {
+        "revenue": ("revenue",
+            lambda b: cr.build_vehicle_revenue_pdf(b, vehicle_number, date_from, date_to, revenue_rows),
+            lambda b: vx.build_vehicle_revenue_xlsx(b, vehicle_number, date_from, date_to, revenue_rows)),
+        "expenses": ("expenses",
+            lambda b: cr.build_vehicle_expenses_pdf(b, vehicle_number, date_from, date_to, expenses_rows),
+            lambda b: vx.build_vehicle_expenses_xlsx(b, vehicle_number, date_from, date_to, expenses_rows)),
+        "fuel": ("fuel_consumption",
+            lambda b: cr.build_fuel_consumption_pdf(b, vehicle_number, date_from, date_to, segments),
+            lambda b: vx.build_fuel_consumption_xlsx(b, vehicle_number, date_from, date_to, segments)),
+        "maintenance": ("maintenance_parts",
+            lambda b: cr.build_maintenance_parts_pdf(b, vehicle_number, date_from, date_to, maintenance_rows),
+            lambda b: vx.build_maintenance_parts_xlsx(b, vehicle_number, date_from, date_to, maintenance_rows)),
+    }
+
+    selected = [s.strip() for s in request.GET.get('reports', '').split(',') if s.strip()]
+    if not selected:
+        selected = list(available.keys())
+    chosen = [available[k] for k in selected if k in available]
+    if not chosen:
+        raise Http404("No valid report selected")
+
+    return deliver(request, chosen, fmt, zip_basename=f"Vehicle_Reports_{vehicle_number}")

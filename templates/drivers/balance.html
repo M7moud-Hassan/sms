@@ -8,6 +8,11 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 </head>
 <body>
+<div id="ajax-loader" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.6); z-index:2000; align-items:center; justify-content:center;">
+  <div class="spinner-border text-primary" role="status" style="width:3rem; height:3rem;">
+    <span class="sr-only">Loading...</span>
+  </div>
+</div>
 <div class="card" style="margin-top: 0; border-top: none;">
     <div class="card-body" style="padding: 5px;">
     <div class="container mb-0 mt-0">
@@ -19,9 +24,10 @@
                 <a href="{% url 'drivers_index' %}" class="btn btn-light text-capitalize border-0" data-mdb-ripple-init data-mdb-ripple-color="dark">
                     <i class="bi bi-arrow-left"></i> Back
                 </a>
-                <a id="export-btn" href="{% url 'export_treasury' id 0 1 %}" class="btn btn-light text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="dark">
-                    <i class="fas fa-file-archive text-primary"></i> Export
-                </a>
+                <button id="export-btn" type="button" class="btn btn-light text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="dark"
+                        data-toggle="modal" data-target="#exportModal">
+                    <i class="fas fa-file-invoice text-primary"></i> Reports
+                </button>
             </div>
         </div>
         </div>
@@ -163,90 +169,70 @@
             </div>
         </div>
     </div>
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
+    <!-- Export Modal -->
+    <div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exportModalLabel">Select Reports to Export</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" value="account_statement" id="reportAccountStatement" checked>
+                        <label class="form-check-label" for="reportAccountStatement">
+                            Account Statement
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" value="trips" id="reportTrips" checked>
+                        <label class="form-check-label" for="reportTrips">
+                            Trips Report
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" value="vehicles" id="reportVehicles" checked>
+                        <label class="form-check-label" for="reportVehicles">
+                            Vehicles Transported Report
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" value="summary" id="reportSummary" checked>
+                        <label class="form-check-label" for="reportSummary">
+                            Summary Report
+                        </label>
+                    </div>
+                    <hr>
+                    <div class="d-flex align-items-center" style="gap:18px;">
+                        <span style="font-weight:600;">Format:</span>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="exportFormat" value="pdf" id="fmtPdf" checked>
+                            <label class="form-check-label" for="fmtPdf">PDF</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="exportFormat" value="xlsx" id="fmtXlsx">
+                            <label class="form-check-label" for="fmtXlsx">Excel</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmExportBtn">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Include Bootstrap JS and dependencies -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 <script>
-        document.addEventListener('DOMContentLoaded', function() {
-  fetch('/drivers/fetch-pmissions/')
-    .then(response => response.json())
-    .then(data => {
-      const pmissions = data.pmissions;
-      const toastContainer = document.getElementById('toast-container');
-      pmissions.forEach(function(mission) {
-        const toastHTML = `
-          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-              <strong class="mr-auto">${mission.customer_name}</strong>
-            </div>
-            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-              From: ${mission.from_location}<br>
-              To: ${mission.to_location}<br>
-              Vehicle: ${mission.car_type} (${mission.car_num})
-            </div>
-          </div>
-        `;
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-        // Add click event to the toast to mark as read and close the toast
-        const toastElement = document.getElementById(`toast-${mission.id}`);
-        toastElement.addEventListener('click', function() {
-          markAsRead(mission.id);
-          $(toastElement).toast('hide'); // Close the toast after marking as read
-        });
-      });
-
-      // Initialize toast with autohide set to false
-      $('.toast').toast({
-        autohide: false
-      }).toast('show');  // Display all toasts without auto-hiding
-    })
-    .catch(error => {
-      console.error('Error fetching PMissions:', error);
-    });
-
-  // Mark the mission as read when clicked
-  function markAsRead(missionId) {
-    fetch(`/drivers/mark-as-read/${missionId}/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-        'Content-Type': 'application/json'
-      },
-    }).then(response => response.json())
-      .then(data => {
-        console.log(`Mission ${missionId} marked as read`);
-      })
-      .catch(error => {
-        console.error('Error marking as read:', error);
-      });
-  }
-
-  // Function to get the CSRF token
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-});
-
         // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
         const inactivityTime = 300000;
         // Variable to hold the inactivity timer
@@ -290,7 +276,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Set default dates and fetch data initially
     setDefaultDates();
 
-    date_from.oninput = date_to.onchange = function() {
+    date_from.onchange = date_to.onchange = function() {
+        if (!date_from.value || !date_to.value) return;   // wait for a full date
         updateExportUrl();
         filterData();
     };
@@ -307,9 +294,58 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateExportUrl() {
         let dateFrom = date_from.value;
         let dateTo = date_to.value;
-        let exportUrl = `/drivers/export/${encodeURIComponent(driverId)}/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/`;
-        exportBtn.href = exportUrl; // Set the href attribute to the constructed URL
+        exportBtn.dataset.baseUrl = `/drivers/export/${encodeURIComponent(driverId)}/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/`;
     }
+
+    document.getElementById('confirmExportBtn').addEventListener('click', function () {
+        let checkboxes = document.querySelectorAll('#exportModal input[type="checkbox"]:checked');
+        let selected = Array.from(checkboxes).map(cb => cb.value);
+
+        if (selected.length === 0) {
+            alert('Please select at least one report.');
+            return;
+        }
+
+        let baseUrl = exportBtn.dataset.baseUrl;
+        let fmt = (document.querySelector('#exportModal input[name="exportFormat"]:checked') || {}).value || 'pdf';
+        let url = baseUrl + '?reports=' + selected.join(',') + '&format=' + fmt;
+
+        let btn = this;
+        let originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+
+        // Clear any stale cookie from a previous download
+        document.cookie = 'export_download_done=; Max-Age=0; path=/';
+
+        // Use a hidden iframe so the page doesn't navigate away
+        let iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+
+        // Poll for the cookie the server sets once the file is ready
+        let pollInterval = setInterval(function () {
+            if (document.cookie.includes('export_download_done=true')) {
+                clearInterval(pollInterval);
+                document.cookie = 'export_download_done=; Max-Age=0; path=/';
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                $('#exportModal').modal('hide');
+                iframe.remove();
+            }
+        }, 500);
+
+        // Safety fallback in case something goes wrong
+        setTimeout(function () {
+            if (!btn.disabled) return;
+            clearInterval(pollInterval);
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            iframe.remove();
+        }, 120000); // 2 minutes
+    });
+
     function filterData() {
         var dateFrom = date_from.value;
         var dateTo = date_to.value;
@@ -321,6 +357,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     date_from: dateFrom,
                     date_to: dateTo,
                 },
+                beforeSend: function() {
+                    document.getElementById('ajax-loader').style.display = 'flex';
+                },
                 success: function(response) {
                     displayInvoices(response.invoices);
                     displayTreasury(response.treasury);
@@ -328,6 +367,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 error: function(xhr, status, error) {
                     console.error('Error fetching data:', error);
+                },
+                complete: function() {
+                    document.getElementById('ajax-loader').style.display = 'none';
                 }
             });
         }

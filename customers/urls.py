@@ -16,7 +16,11 @@ urlpatterns = [
     path('edit_attachment/<int:id>/', views.edit_attachment, name='edit_attachment'),
     path('delete_attachment/<int:id>/', views.delete_attachment, name='delete_attachment'),
     path('balance/<int:id>/', views.customer_balance, name="customer_balance"),
+    path('info_report/', views.customer_info_report, name='customer_info_report'),
     path('filter/<int:id>/', views.filter_invoices, name='cfilter_invoices'),
+    path('export_combined/<int:id>/', views.export_combined_invoice, name='export_combined_invoice'),
+    path('activities/<int:id>/', views.customer_activities, name='customer_activities'),
+    path('export_vehicles/<int:id>/', views.export_customer_vehicles, name='export_customer_vehicles'),
 ]
 
 

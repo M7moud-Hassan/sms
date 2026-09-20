@@ -1,19 +1,22 @@
-from django.shortcuts import get_object_or_404
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
+from django.contrib.auth.decorators import login_required
+import os, io
+from .reports_pdf import build_customers_pdf, build_drivers_pdf
+from django.conf import settings
+from collections import defaultdict
 from django.contrib.auth import authenticate, login, logout
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Sum, Max
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect, FileResponse, Http404
 from django.urls import reverse
 from django.contrib import messages
 import os
 import openpyxl
 from django.conf import settings
-from django.db.models import Sum, Max, Q, F, Value as V, CharField, DecimalField, OuterRef, Subquery
-import subprocess
+from django.db.models import Sum, Max, Q, F, Value as V, CharField, DecimalField, OuterRef, Subquery, Count
 import pandas as pd
 import json
 from datetime import datetime, timedelta
@@ -21,7 +24,7 @@ from dateutil.relativedelta import relativedelta
 from calendar import monthrange
 from recipt_vouchers.models import Vouchers, Attachments
 from drivers.models import Drivers, PMission, SMission
-from customers.models import Customers
+from customers.models import Customers, CostCenter
 from invoices.models import Invoices
 from suppliers.models import Invoices as Inv
 
@@ -103,6 +106,7 @@ def job_index(request, username, password):
         to_location = last_pmission.to_location
     pmissions = PMission.objects.filter(Q(customer__id=customer.id) & (Q(mmission__isnull=True) | (Q(mmission__smission__car_num=F('car_num')) & Q(mmission__smission__receipt__isnull=False)))).exclude(mmission__smission__receipt="Invoiced")
     pmissions = pmissions.annotate(smission_receipt=Subquery(SMission.objects.filter(mmission=OuterRef('mmission')).values('receipt')[:1]))
+    cost_centers = CostCenter.objects.filter(customer__id=customer.id).order_by('name')
     customer_context = {
         'customer': customer,
         'pre_pmissions1': pre_pmissions1,
@@ -113,6 +117,7 @@ def job_index(request, username, password):
         'employee': employee,
         'from_location': from_location,
         'to_location': to_location,
+        'cost_centers': cost_centers,
     }
     return render(request, "drivers/job_box.html", customer_context)
 
@@ -130,9 +135,10 @@ def add_pmission(request, customer_id):
         car_num = request.POST.get('car_num')
         car_color = request.POST.get('car_color')
         notes = request.POST.get('notes')
+        cost_center = CostCenter.objects.filter(id=request.POST.get('cost_center') or None, customer=customer).first()
         pmission = PMission.objects.filter(Q(date=date) & Q(car_num=car_num) & Q(car_type=car_type) & Q(from_location=from_location) & Q(to_location=to_location))
         if not pmission:
-            new_pmission = PMission(customer=customer, employee=employee, date=date, from_location=from_location, to_location=to_location, car_type=car_type, car_mark=car_mark, car_num=car_num, car_color=car_color, notes=notes)
+            new_pmission = PMission(customer=customer, employee=employee, date=date, from_location=from_location, to_location=to_location, car_type=car_type, car_mark=car_mark, car_num=car_num, car_color=car_color, notes=notes, cost_center=cost_center)
             new_pmission.save()
     related_url = reverse('job_index', kwargs={'username': username, 'password': password})
     return HttpResponseRedirect(related_url)
@@ -213,6 +219,7 @@ def edit_pmission(request, id, customer_id):
         pmission.car_num = request.POST.get('car_num')
         pmission.car_color = request.POST.get('car_color')
         pmission.notes = request.POST.get('notes')
+        pmission.cost_center = CostCenter.objects.filter(id=request.POST.get('cost_center') or None, customer=customer).first()
         pmission.created_at = datetime.now()
         tpmission = PMission.objects.exclude(id=id)
         if not tpmission:
@@ -227,6 +234,25 @@ def edit_pmission(request, id, customer_id):
                 pmission.save()
     related_url = reverse('job_index', kwargs={'username': username, 'password': password})
     return HttpResponseRedirect(related_url)
+
+def add_cost_center(request, customer_id):
+    customer = Customers.objects.filter(id=customer_id).first()
+    if request.method == 'POST':
+        name = (request.POST.get('name') or '').strip()
+        if not name:
+            return JsonResponse({'success': False, 'error': 'الاسم مطلوب'}, status=400)
+        if CostCenter.objects.filter(customer=customer, name=name).exists():
+            return JsonResponse({'success': False, 'error': 'مركز التكلفة موجود مسبقاً'}, status=400)
+        cc = CostCenter.objects.create(customer=customer, name=name)
+        return JsonResponse({'success': True, 'id': cc.id, 'name': cc.name})
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def delete_cost_center(request, id, customer_id):
+    customer = Customers.objects.filter(id=customer_id).first()
+    if request.method == 'POST':
+        CostCenter.objects.filter(id=id, customer=customer).delete()
+        return JsonResponse({'success': True, 'id': id})
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 def delete_pmission(request, id, customer_id):
     customer = Customers.objects.filter(id=customer_id).first()
@@ -244,3 +270,98 @@ def delete_pmission(request, id, customer_id):
 def logout_user(request):
     logout(request)
     return redirect('balances_index')
+
+@login_required
+def top_customers_pdf(request, date_from, date_to):
+    # vehicles handled per customer (voucher count, via the voucher's invoice)
+    vehicle_rows = (
+        Vouchers.objects
+        .filter(invoice__date__range=(date_from, date_to), invoice__require_id__isnull=False)
+        .values('invoice__require_id', 'invoice__require_id__name')
+        .annotate(vehicles=Count('id'))
+    )
+    # revenue per customer (summed on Invoices directly, so tamount isn't inflated by the voucher join)
+    revenue_rows = (
+        Invoices.objects
+        .filter(date__range=(date_from, date_to), require_id__isnull=False)
+        .values('require_id', 'require_id__name')
+        .annotate(revenue=Sum('tamount'))
+    )
+    merged = defaultdict(lambda: {'name': '', 'vehicles': 0, 'revenue': 0})
+    for r in vehicle_rows:
+        cid = r['invoice__require_id']
+        merged[cid]['name'] = r['invoice__require_id__name']
+        merged[cid]['vehicles'] = r['vehicles']
+    for r in revenue_rows:
+        cid = r['require_id']
+        merged[cid]['name'] = r['require_id__name']
+        merged[cid]['revenue'] = r['revenue'] or 0
+    rows = sorted(merged.values(), key=lambda x: x['revenue'], reverse=True)
+
+    buf = io.BytesIO()
+    build_customers_pdf(
+        buf, rows, date_from, date_to,
+        total_vehicles=sum(x['vehicles'] for x in rows),
+        total_revenue=sum(x['revenue'] for x in rows),
+    )
+    buf.seek(0)
+    response = HttpResponse(buf.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="Top Customers {date_from} to {date_to}.pdf"'
+    return response
+
+@login_required
+def top_drivers_pdf(request, date_from, date_to):
+    rows = (
+        Vouchers.objects
+        .filter(invoice__date__range=(date_from, date_to), invoice__driver__isnull=False)
+        .values('invoice__driver', 'invoice__driver__name')
+        .annotate(vehicles=Count('id'))
+        .order_by('-vehicles')
+    )
+    rows = [{'name': r['invoice__driver__name'], 'vehicles': r['vehicles']} for r in rows]
+
+    buf = io.BytesIO()
+    build_drivers_pdf(
+        buf, rows, date_from, date_to,
+        total_vehicles=sum(x['vehicles'] for x in rows),
+    )
+    buf.seek(0)
+    response = HttpResponse(buf.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="Top Drivers {date_from} to {date_to}.pdf"'
+    return response
+
+def _ranking_data(date_from, date_to):
+    # vehicles handled per customer (voucher count via the voucher's invoice)
+    cust_vehicles = {
+        r['invoice__require_id']: r['vehicles']
+        for r in Vouchers.objects
+            .filter(invoice__date__range=(date_from, date_to), invoice__require_id__isnull=False)
+            .values('invoice__require_id').annotate(vehicles=Count('id'))
+    }
+    # revenue per customer (summed on Invoices, so tamount isn't inflated by the voucher join)
+    cust_rev = (Invoices.objects
+        .filter(date__range=(date_from, date_to), require_id__isnull=False)
+        .values('require_id', 'require_id__name')
+        .annotate(revenue=Sum('tamount'))
+        .order_by('-revenue')[:10])
+    # vehicles transported per driver
+    drv = (Vouchers.objects
+        .filter(invoice__date__range=(date_from, date_to), invoice__driver__isnull=False)
+        .values('invoice__driver__name')
+        .annotate(vehicles=Count('id'))
+        .order_by('-vehicles')[:10])
+    return {
+        'customers_labels': [r['require_id__name'] for r in cust_rev],
+        'customers_revenue': [float(r['revenue'] or 0) for r in cust_rev],
+        'customers_vehicles': [cust_vehicles.get(r['require_id'], 0) for r in cust_rev],
+        'drivers_labels': [r['invoice__driver__name'] for r in drv],
+        'drivers_vehicles': [r['vehicles'] for r in drv],
+    }
+
+@login_required
+def ranking_data(request):
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    if not date_from or not date_to:
+        return JsonResponse({'error': 'date_from and date_to required'}, status=400)
+    return JsonResponse(_ranking_data(date_from, date_to))

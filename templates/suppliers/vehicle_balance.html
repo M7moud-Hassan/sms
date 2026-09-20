@@ -7,6 +7,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
+<style>
+  #ajax-loader { display:none; position:fixed; inset:0; background:rgba(255,255,255,0.6);
+                 z-index:2000; align-items:center; justify-content:center; }
+  #ajax-loader .spin { width:3rem; height:3rem; border:4px solid #cfe2ff; border-top-color:#0d6efd;
+                 border-radius:50%; animation:ajx 0.8s linear infinite; }
+  @keyframes ajx { to { transform:rotate(360deg); } }
+</style>
+<div id="ajax-loader"><div class="spin"></div></div>
+<div id="exportModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:2100; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; max-width:480px; width:90%; padding:20px;">
+    <h5 style="margin-top:0;">Select reports to export</h5>
+    <div style="display:flex; flex-direction:column; gap:8px; margin:14px 0;">
+      <label><input type="checkbox" value="revenue" checked> Vehicle revenue</label>
+      <label><input type="checkbox" value="expenses" checked> Vehicle expenses</label>
+      <label><input type="checkbox" value="fuel" checked> Fuel consumption (km/L)</label>
+      <label><input type="checkbox" value="maintenance" checked> Maintenance parts &amp; costs</label>
+    </div>
+    <div style="display:flex; gap:18px; align-items:center; margin:6px 0 12px; padding-top:8px; border-top:1px solid #eee;">
+      <span style="font-weight:600;">Format:</span>
+      <label><input type="radio" name="exportFormat" value="pdf" checked> PDF</label>
+      <label><input type="radio" name="exportFormat" value="xlsx"> Excel</label>
+    </div>
+    <div style="text-align:right;">
+      <button type="button" id="cancelExportBtn" class="btn btn-light">Cancel</button>
+      <button type="button" id="confirmExportBtn" class="btn btn-primary">Download</button>
+    </div>
+  </div>
+</div>
 <div class="card" style="margin-top: 0; border-top: none;">
     <div class="card-body" style="padding: 5px;">
     <div class="container mb-0 mt-0">
@@ -18,9 +46,9 @@
                 <a href="{% url 'vehicles' %}" class="btn btn-light text-capitalize border-0" data-mdb-ripple-init data-mdb-ripple-color="dark">
                     <i class="bi bi-arrow-left"></i> Back
                 </a>
-                <a id="export-btn" href="{% url 'export_profit' id 0 1 %}" class="btn btn-light text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="dark">
-                    <i class="fas fa-file-archive text-primary"></i> Export
-                </a>
+                <button type="button" id="export-btn" class="btn btn-light text-capitalize" data-mdb-ripple-init data-mdb-ripple-color="dark">
+                    <i class="fas fa-file-invoice text-primary"></i> Reports
+                </button>
             </div>
         </div>
         </div>
@@ -94,81 +122,12 @@
 </table>
 </div>
 </div>
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
     <!-- Include Bootstrap JS and dependencies -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 <script>
-        document.addEventListener('DOMContentLoaded', function() {
-    fetch('/drivers/fetch-pmissions/')
-      .then(response => response.json())
-      .then(data => {
-        const pmissions = data.pmissions;
-        const toastContainer = document.getElementById('toast-container');
-        pmissions.forEach(function(mission) {
-          const toastHTML = `
-            <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
-              <div class="toast-header">
-                <strong class="mr-auto">${mission.customer_name}</strong>
-              </div>
-              <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-                From: ${mission.from_location}<br>
-                To: ${mission.to_location}<br>
-                Vehicle: ${mission.car_type} (${mission.car_num})
-              </div>
-            </div>
-          `;
-          toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-          // Mark the mission as read after displaying the toast
-          markAsRead(mission.id);
-        });
-
-        $('.toast').toast('show');
-      })
-      .catch(error => {
-        console.error('Error fetching PMissions:', error);
-      });
-
-    function markAsRead(missionId) {
-      fetch(`/drivers/mark-as-read/${missionId}/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-          'Content-Type': 'application/json'
-        },
-      }).then(response => response.json())
-        .then(data => {
-          console.log(`Mission ${missionId} marked as read`);
-        })
-        .catch(error => {
-          console.error('Error marking as read:', error);
-        });
-    }
-
-    // Function to get the CSRF token
-    function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-          const cookie = cookies[i].trim();
-          if (cookie.substring(0, name.length + 1) === (name + '=')) {
-            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-            break;
-          }
-        }
-      }
-      return cookieValue;
-    }
-  });
-
     document.addEventListener('DOMContentLoaded', function () {
     let date_from = document.getElementById('date_from');
     let date_to = document.getElementById('date_to');
@@ -198,9 +157,42 @@
     function updateExportUrl() {
         let dateFrom = date_from.value;
         let dateTo = date_to.value;
-        let exportUrl = `/suppliers/pexport/${encodeURIComponent(vehicleId)}/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/`;
-        exportBtn.href = exportUrl; // Set the href attribute to the constructed URL
+        exportBtn.dataset.baseUrl = `/suppliers/vehicle_reports/${encodeURIComponent(vehicleId)}/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/`;
     }
+
+    // ---- report picker + download (iframe + cookie poll) ----
+    let exportModal = document.getElementById('exportModal');
+    exportBtn.addEventListener('click', () => { exportModal.style.display = 'flex'; });
+    document.getElementById('cancelExportBtn').addEventListener('click', () => { exportModal.style.display = 'none'; });
+
+    document.getElementById('confirmExportBtn').addEventListener('click', function () {
+        let selected = Array.from(exportModal.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        if (selected.length === 0) { alert('Please select at least one report.'); return; }
+        let fmt = (exportModal.querySelector('input[name="exportFormat"]:checked') || {}).value || 'pdf';
+        let url = exportBtn.dataset.baseUrl + '?reports=' + selected.join(',') + '&format=' + fmt;
+
+        let btn = this, original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+        document.cookie = 'export_download_done=; Max-Age=0; path=/';
+
+        let iframe = document.createElement('iframe');
+        iframe.style.display = 'none'; iframe.src = url;
+        document.body.appendChild(iframe);
+
+        let poll = setInterval(function () {
+            if (document.cookie.includes('export_download_done=true')) {
+                clearInterval(poll);
+                document.cookie = 'export_download_done=; Max-Age=0; path=/';
+                btn.disabled = false; btn.innerHTML = original;
+                exportModal.style.display = 'none'; iframe.remove();
+            }
+        }, 500);
+        setTimeout(function () {                 // safety fallback
+            if (!btn.disabled) return;
+            clearInterval(poll); btn.disabled = false; btn.innerHTML = original; iframe.remove();
+        }, 120000);
+    });
     function filterData() {
         var dateFrom = date_from.value;
         var dateTo = date_to.value;

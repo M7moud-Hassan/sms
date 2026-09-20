@@ -85,13 +85,45 @@
           </div>
         </div>
       </div>
-      <!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+      <div class="row">
+        <div class="col-md-12">
+          <div class="tile">
+            <div class="row align-items-end">
+              <div class="col-md-3">
+                <label>From</label>
+                <input type="date" id="report_from" class="form-control">
+              </div>
+              <div class="col-md-3">
+                <label>To</label>
+                <input type="date" id="report_to" class="form-control">
+              </div>
+              <div class="col-md-2">
+                <button class="btn btn-primary btn-block" onclick="loadRankings()">Apply</button>
+              </div>
+              <div class="col-md-2">
+                <button class="btn btn-outline-primary btn-block" onclick="openReport('top_customers')">Customers PDF</button>
+              </div>
+              <div class="col-md-2">
+                <button class="btn btn-outline-success btn-block" onclick="openReport('top_drivers')">Drivers PDF</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6">
+          <div class="tile">
+            <h3 class="tile-title">Top Customers</h3>
+            <div class="ratio ratio-16x9"><div id="topCustomersChart"></div></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="tile">
+            <h3 class="tile-title">Top Drivers — Vehicles Transported</h3>
+            <div class="ratio ratio-16x9"><div id="topDriversChart"></div></div>
+          </div>
+        </div>
+      </div>
     </main>
     <!-- Essential javascripts for application to work-->
     <script src="{% static 'js/jquery-3.7.0.min.js' %}"></script>
@@ -100,78 +132,7 @@
     <!-- Page specific javascripts-->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script type="text/javascript">
-  document.addEventListener('DOMContentLoaded', function() {
-  fetch('/drivers/fetch-pmissions/')
-    .then(response => response.json())
-    .then(data => {
-      const pmissions = data.pmissions;
-      const toastContainer = document.getElementById('toast-container');
-      pmissions.forEach(function(mission) {
-        const toastHTML = `
-          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-              <strong class="mr-auto">${mission.customer_name}</strong>
-            </div>
-            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-              From: ${mission.from_location}<br>
-              To: ${mission.to_location}<br>
-              Vehicle: ${mission.car_type} (${mission.car_num})
-            </div>
-          </div>
-        `;
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-        // Add click event to the toast to mark as read and close the toast
-        const toastElement = document.getElementById(`toast-${mission.id}`);
-        toastElement.addEventListener('click', function() {
-          markAsRead(mission.id);
-          $(toastElement).toast('hide'); // Close the toast after marking as read
-        });
-      });
-
-      // Initialize toast with autohide set to false
-      $('.toast').toast({
-        autohide: false
-      }).toast('show');  // Display all toasts without auto-hiding
-    })
-    .catch(error => {
-      console.error('Error fetching PMissions:', error);
-    });
-
-  // Mark the mission as read when clicked
-  function markAsRead(missionId) {
-    fetch(`/drivers/mark-as-read/${missionId}/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-        'Content-Type': 'application/json'
-      },
-    }).then(response => response.json())
-      .then(data => {
-        console.log(`Mission ${missionId} marked as read`);
-      })
-      .catch(error => {
-        console.error('Error marking as read:', error);
-      });
-  }
-
-  // Function to get the CSRF token
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-});
-
+  
       // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
         const inactivityTime = 300000;
         // Variable to hold the inactivity timer
@@ -292,6 +253,67 @@
       	ga('send', 'pageview');
       }
     </script>
+    <script>
+  const tcChart = echarts.init(document.getElementById('topCustomersChart'), null, { renderer: 'svg' });
+  const tdChart = echarts.init(document.getElementById('topDriversChart'), null, { renderer: 'svg' });
+
+  function renderCustomers(d) {
+    tcChart.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['Revenue', 'Vehicles'] },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'category', data: d.customers_labels, axisLabel: { interval: 0, rotate: 30 } },
+      yAxis: [{ type: 'value', name: 'Revenue' }, { type: 'value', name: 'Vehicles' }],
+      series: [
+        { name: 'Revenue', type: 'bar', data: d.customers_revenue },
+        { name: 'Vehicles', type: 'line', yAxisIndex: 1, data: d.customers_vehicles }
+      ]
+    }, true);
+  }
+
+  function renderDrivers(d) {
+    const labels = d.drivers_labels.slice().reverse();
+    const values = d.drivers_vehicles.slice().reverse();
+    tdChart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'value' },
+      yAxis: { type: 'category', data: labels },
+      series: [{ type: 'bar', data: values }]
+    }, true);
+  }
+
+  function loadRankings() {
+    const from = document.getElementById('report_from').value;
+    const to = document.getElementById('report_to').value;
+    if (!from || !to) { alert('Please choose both dates'); return; }
+    tcChart.showLoading(); tdChart.showLoading();
+    fetch("{% url 'ranking_data' %}?date_from=" + from + "&date_to=" + to)
+      .then(r => r.json())
+      .then(d => { renderCustomers(d); renderDrivers(d); tcChart.hideLoading(); tdChart.hideLoading(); })
+      .catch(() => { tcChart.hideLoading(); tdChart.hideLoading(); alert('Failed to load data'); });
+  }
+
+  function openReport(kind) {
+    const from = document.getElementById('report_from').value;
+    const to = document.getElementById('report_to').value;
+    if (!from || !to) { alert('Please choose both dates'); return; }
+    const base = (kind === 'top_customers')
+      ? "{% url 'top_customers_pdf' '0000-00-00' '1111-11-11' %}"
+      : "{% url 'top_drivers_pdf' '0000-00-00' '1111-11-11' %}";
+    window.open(base.replace('0000-00-00', from).replace('1111-11-11', to), '_blank');
+  }
+
+  // default to last 30 days and draw on load
+  (function () {
+    const to = new Date();
+    const from = new Date(); from.setDate(from.getDate() - 30);
+    const fmt = x => x.toISOString().slice(0, 10);
+    document.getElementById('report_to').value = fmt(to);
+    document.getElementById('report_from').value = fmt(from);
+    loadRankings();
+  })();
+</script>
   </body>
 {% else %}
 <head>

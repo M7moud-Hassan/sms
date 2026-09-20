@@ -106,7 +106,7 @@ background-color: #f7f7fc;
                                     {% endif %}
 								</tr>
 							</thead>
-							<tbody>
+							<tbody id="papers-body">
 								{% for paper in papers %}
 							  <tr>
 								<td class="align-middle">{{ paper.description }}</td>
@@ -120,6 +120,51 @@ background-color: #f7f7fc;
 							  {% endfor %}
 							</tbody>
 						</table>
+						<div id="papers-pager" class="d-flex justify-content-between align-items-center mt-2">
+							<button type="button" id="pap-prev" class="btn btn-sm btn-outline-primary">Prev</button>
+							<span id="pap-pageinfo" class="text-muted"></span>
+							<button type="button" id="pap-next" class="btn btn-sm btn-outline-primary">Next</button>
+						</div>
+					</div>
+				</div>
+				<div class="card mt-3">
+					<div class="input-group mb-3" style="padding: 10px 20px 0 20px;">
+						<h5 class="card-title mb-0">Items Purchased from Supplier</h5>
+					</div>
+					<div class="card-body">
+						<table class="table table-striped" style="width:100%">
+							<thead>
+								<tr>
+									<th>Item</th>
+									<th>Description</th>
+									<th>Vehicle</th>
+									<th>Invoice #</th>
+									<th>Date</th>
+									<th>Qty</th>
+									<th>Unit Price</th>
+									<th>Total</th>
+								</tr>
+							</thead>
+							<tbody id="items-body">
+								{% for it in purchased_items %}
+								<tr>
+									<td class="align-middle">{{ it.item }}</td>
+									<td class="align-middle">{{ it.description|default:'' }}</td>
+									<td class="align-middle">{{ it.vehicle__vehicle_number|default:'' }}</td>
+									<td class="align-middle">{{ it.invoice__number }}</td>
+									<td class="align-middle">{{ it.invoice__date }}</td>
+									<td class="align-middle">{{ it.qty|default:0 }}</td>
+									<td class="align-middle">{{ it.amount|default:0 }}</td>
+									<td class="align-middle">{{ it.tamount|default:0 }}</td>
+								</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+						<div id="items-pager" class="d-flex justify-content-between align-items-center mt-2">
+							<button type="button" id="it-prev" class="btn btn-sm btn-outline-primary">Prev</button>
+							<span id="it-pageinfo" class="text-muted"></span>
+							<button type="button" id="it-next" class="btn btn-sm btn-outline-primary">Next</button>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -163,7 +208,15 @@ background-color: #f7f7fc;
 							</tbody>
 						</table>
 						<strong>Activity</strong>
-						<ul class="timeline mt-2 mb-0">
+						<div class="input-group input-group-sm mt-2 mb-2">
+							<span class="input-group-text">From</span>
+							<input type="date" id="act_from" class="form-control">
+							<span class="input-group-text">To</span>
+							<input type="date" id="act_to" class="form-control">
+							<button type="button" id="act_clear" class="btn btn-outline-secondary">All</button>
+						</div>
+						<input type="hidden" id="act_supplier_id" value="{{ id }}">
+						<ul class="timeline mt-2 mb-0" id="activity-list">
 							{% for combined_entry in combined_entries %}
 							<li class="timeline-item">
 								<strong>{{combined_entry.account}} #{{combined_entry.number_annotated}}</strong>
@@ -318,6 +371,92 @@ background-color: #f7f7fc;
             var action = $('#deleteForm').attr('action').replace('0', id);
             $('#deleteForm').attr('action', action);
         });
+
+        // ---- Activity date filter (default: last 7 days) ----
+	(function () {
+		var custEl = document.getElementById('act_supplier_id');
+		if (!custEl) return;
+		var id = custEl.value;
+		var fromEl = document.getElementById('act_from');
+		var toEl = document.getElementById('act_to');
+		var listEl = document.getElementById('activity-list');
+
+		function fmt(iso) {
+			var d = new Date(iso);
+			return d.toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'numeric', hour12:true });
+		}
+		function setDefaultDates() {
+			var end = new Date(), start = new Date(end);
+			start.setDate(start.getDate() - 6);
+			var f = function (d) { return d.toISOString().split('T')[0]; };
+			fromEl.value = f(start); toEl.value = f(end);
+		}
+		function load() {
+			var qs = '';
+			if (fromEl.value && toEl.value) qs = '?date_from=' + fromEl.value + '&date_to=' + toEl.value;
+			fetch('/suppliers/activities/' + id + '/' + qs)
+				.then(function (r) { return r.json(); })
+				.then(function (data) {
+					if (!data.entries.length) { listEl.innerHTML = '<li class="timeline-item"><p>No activity.</p></li>'; return; }
+					listEl.innerHTML = data.entries.map(function (e) {
+						return '<li class="timeline-item"><strong>' + e.account + ' #' + (e.number == null ? '' : e.number) +
+							'</strong><span class="float-right text-muted text-sm">' + fmt(e.created_at) +
+							'</span><p>Total Value: ' + e.amount + '</p></li>';
+					}).join('');
+				}).catch(function () {});
+		}
+		fromEl.addEventListener('change', function () { if (fromEl.value && toEl.value) load(); });
+		toEl.addEventListener('change', function () { if (fromEl.value && toEl.value) load(); });
+		document.getElementById('act_clear').addEventListener('click', function () {
+			fromEl.value = ''; toEl.value = ''; load();
+		});
+		setDefaultDates();
+		load();
+	})();
+
+    // ---- Supplier attachments pagination (10 per page) ----
+	(function () {
+		var body = document.getElementById('papers-body');
+		if (!body) return;
+		var rows = Array.prototype.slice.call(body.querySelectorAll('tr'));
+		var pageSize = 10, page = 1;
+		var pages = Math.max(1, Math.ceil(rows.length / pageSize));
+		var prev = document.getElementById('pap-prev');
+		var next = document.getElementById('pap-next');
+		var info = document.getElementById('pap-pageinfo');
+		function render() {
+			var s = (page - 1) * pageSize, e = s + pageSize;
+			rows.forEach(function (r, i) { r.style.display = (i >= s && i < e) ? '' : 'none'; });
+			info.textContent = 'Page ' + page + ' of ' + pages + ' (' + rows.length + ' attachments)';
+			prev.disabled = (page === 1); next.disabled = (page === pages);
+		}
+		prev.addEventListener('click', function () { if (page > 1) { page--; render(); } });
+		next.addEventListener('click', function () { if (page < pages) { page++; render(); } });
+		if (rows.length === 0) { document.getElementById('papers-pager').style.display = 'none'; }
+		render();
+	})();
+
+    // ---- Items purchased pagination (10 per page) ----
+	(function () {
+		var body = document.getElementById('items-body');
+		if (!body) return;
+		var rows = Array.prototype.slice.call(body.querySelectorAll('tr'));
+		var pageSize = 10, page = 1;
+		var pages = Math.max(1, Math.ceil(rows.length / pageSize));
+		var prev = document.getElementById('it-prev');
+		var next = document.getElementById('it-next');
+		var info = document.getElementById('it-pageinfo');
+		function render() {
+			var s = (page - 1) * pageSize, e = s + pageSize;
+			rows.forEach(function (r, i) { r.style.display = (i >= s && i < e) ? '' : 'none'; });
+			info.textContent = 'Page ' + page + ' of ' + pages + ' (' + rows.length + ' items)';
+			prev.disabled = (page === 1); next.disabled = (page === pages);
+		}
+		prev.addEventListener('click', function () { if (page > 1) { page--; render(); } });
+		next.addEventListener('click', function () { if (page < pages) { page++; render(); } });
+		if (rows.length === 0) { document.getElementById('items-pager').style.display = 'none'; }
+		render();
+	})();
 </script>
 </body>
 {% else %}

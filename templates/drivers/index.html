@@ -30,6 +30,10 @@
                     </button>
                 </div>
             </form>
+            <a href="{% url 'drivers_overtime' %}" class="btn btn-warning"
+               style="border-radius: 0; height: 50px; margin-left: 10px; display: flex; align-items: center; white-space: nowrap; flex-shrink: 0; font-weight: bold;">
+                <i class="fas fa-user-clock" style="margin-right: 6px;"></i> Overtime
+            </a>
         </div>
     </div>
 </div>
@@ -75,7 +79,7 @@
                 <div class="dropdown-menu dropdown-menu-right">
                     <a class="dropdown-item add-button" href="{% url 'missions_index' driver.id %}">Required Missions</a>
                     <div class="dropdown-divider"></div>
-                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ driver.id }}" data-name="{{ driver.name }}" data-status="{{ driver.status }}" data-phone="{{ driver.phone|default:'' }}" data-username="{{ driver.username }}" data-password="{{ driver.password }}">Edit Driver Data</a>
+                    <a class="dropdown-item edit-button" href="#" data-toggle="modal" data-target="#editModal" data-id="{{ driver.id }}" data-name="{{ driver.name }}" data-status="{{ driver.status }}" data-status-from="{{ driver.status_from|date:'Y-m-d' }}" data-status-to="{{ driver.status_to|date:'Y-m-d' }}" data-phone="{{ driver.phone|default:'' }}" data-username="{{ driver.username }}" data-password="{{ driver.password }}">Edit Driver Data</a>
                     {% if driver.balance > 0 %}
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item add-button" href="#" data-toggle="modal" data-target="#addTreasury" data-id="{{ driver.id }}" data-name="{{ driver.name }}" data-amount="{{ driver.balance }}">Pay to Treasury</a>
@@ -167,10 +171,24 @@
                         <br>
                         <div style="width: 49.5%; margin-left: 1%;">
                         <label style="color: darkblue; font-weight: bold;" for="status">Status</label>
-                        <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="status" name="status" required>
+                        <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="status" name="status" required onchange="toggleStatusDates('status','add-status-dates')">
                             <option>Available</option>
-                            <option>Not Available</option>
+                            <option>Leaving work</option>
+                            <option>On leave</option>
+                            <option>On training course</option>
+                            <option>On duty but off duty</option>
                         </select>
+                        </div>
+                        <br>
+                        <div class="row g-2" id="add-status-dates" style="margin: 0; display: none;">
+                            <div class="col-6">
+                                <label style="color: darkblue; font-weight: bold;" for="add-status_from">From</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="add-status_from" name="status_from">
+                            </div>
+                            <div class="col-6">
+                                <label style="color: darkblue; font-weight: bold;" for="add-status_to">To</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="add-status_to" name="status_to">
+                            </div>
                         </div>
                         <br>
                         <div class="form-group">
@@ -217,10 +235,24 @@
                         <br>
                         <div style="width: 49.5%; margin-left: 1%;">
                         <label style="color: darkblue; font-weight: bold;" for="edit-status">Status</label>
-                        <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="edit-status" name="status" required>
+                        <select style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" class="form-select" id="edit-status" name="status" required onchange="toggleStatusDates('edit-status','edit-status-dates')">
                             <option>Available</option>
-                            <option>Not Available</option>
+                            <option>Leaving work</option>
+                            <option>On leave</option>
+                            <option>On training course</option>
+                            <option>On duty but off duty</option>
                         </select>
+                        </div>
+                        <br>
+                        <div class="row g-2" id="edit-status-dates" style="margin: 0; display: none;">
+                            <div class="col-6">
+                                <label style="color: darkblue; font-weight: bold;" for="edit-status_from">From</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="edit-status_from" name="status_from">
+                            </div>
+                            <div class="col-6">
+                                <label style="color: darkblue; font-weight: bold;" for="edit-status_to">To</label>
+                                <input style="background-color: lightgoldenrodyellow; color: red; font-weight: bold;" type="date" class="form-control" id="edit-status_to" name="status_to">
+                            </div>
                         </div>
                         <br>
                         <div class="form-group">
@@ -270,85 +302,8 @@
             </div>
         </div>
     </div>
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-  fetch('/drivers/fetch-pmissions/')
-    .then(response => response.json())
-    .then(data => {
-      const pmissions = data.pmissions;
-      const toastContainer = document.getElementById('toast-container');
-      pmissions.forEach(function(mission) {
-        const toastHTML = `
-          <div class="toast" id="toast-${mission.id}" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-              <strong class="mr-auto">${mission.customer_name}</strong>
-            </div>
-            <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-              From: ${mission.from_location}<br>
-              To: ${mission.to_location}<br>
-              Vehicle: ${mission.car_type} (${mission.car_num})
-            </div>
-          </div>
-        `;
-        toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-        // Add click event to the toast to mark as read and close the toast
-        const toastElement = document.getElementById(`toast-${mission.id}`);
-        toastElement.addEventListener('click', function() {
-          markAsRead(mission.id);
-          $(toastElement).toast('hide'); // Close the toast after marking as read
-        });
-      });
-
-      // Initialize toast with autohide set to false
-      $('.toast').toast({
-        autohide: false
-      }).toast('show');  // Display all toasts without auto-hiding
-    })
-    .catch(error => {
-      console.error('Error fetching PMissions:', error);
-    });
-
-  // Mark the mission as read when clicked
-  function markAsRead(missionId) {
-    fetch(`/drivers/mark-as-read/${missionId}/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-        'Content-Type': 'application/json'
-      },
-    }).then(response => response.json())
-      .then(data => {
-        console.log(`Mission ${missionId} marked as read`);
-      })
-      .catch(error => {
-        console.error('Error marking as read:', error);
-      });
-  }
-
-  // Function to get the CSRF token
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-});
 
     function setDynamicHeight() {
         // Get the screen height
@@ -457,19 +412,29 @@
         }
     });
 });
+    function toggleStatusDates(statusSelectId, datesContainerId) {
+        var val = document.getElementById(statusSelectId).value;
+        document.getElementById(datesContainerId).style.display = (val === 'Available') ? 'none' : 'flex';
+    }
+
     $(document).on('click', '.edit-button', function() {
         var id = $(this).data('id');
         var name = $(this).data('name');
         var status = $(this).data('status');
         var phone = $(this).data('phone');
+        var statusFrom = $(this).data('statusFrom');
+        var statusTo = $(this).data('statusTo');
         var username = $(this).data('username');
         var password = $(this).data('password');
         $('#edit-id').val(id);
         $('#edit-name').val(name);
         $('#edit-status').val(status);
         $('#edit-phone').val(phone);
+        $('#edit-status_from').val(statusFrom || '');
+        $('#edit-status_to').val(statusTo || '');
         $('#edit-username').val(username);
         $('#edit-password').val(password);
+        toggleStatusDates('edit-status', 'edit-status-dates');
         var action = $('#editForm').attr('action').replace('0', id);
         $('#editForm').attr('action', action);
     });

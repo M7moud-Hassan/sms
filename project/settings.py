@@ -26,13 +26,24 @@ load_dotenv(BASE_DIR / ".env")
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-!@#4$%5^&*()_+1234567890abcdefghijklmnopqrstuvwxyz")
+SECRET_KEY = os.getenv("SECRET_KEY", 'django-insecure-+_1=s5jdd*n(q7$k7u!0&r8u!_f!8vnwj+^^bl_-2c4a9zek8p')
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = ["*"]
 
+JOTRACK_BASE_URL = "https://jotrackv2.sama.jo"
+JOTRACK_LOGIN_PATH = "/en-us/Login"
+JOTRACK_BASE_URL  = "https://jotrackv2.sama.jo"
+JOTRACK_USERNAME  = "newvision2024"
+JOTRACK_PASSWORD  = "Amro@495990"
+# Only fill these if auto-detection doesn't work (see step 3):
+JOTRACK_LOGIN_POST_PATH = ""
+JOTRACK_USER_FIELD = ""
+JOTRACK_PASS_FIELD = ""
+JOTRACK_CACHE_SECONDS = 15
 
 # Application definition
 
@@ -180,7 +191,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': os.getenv('DB_NAME', 'smtproject'),
         'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'mahm01142'),
+        'PASSWORD': os.getenv('DB_PASSWORD', '290513mnf'),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
     }

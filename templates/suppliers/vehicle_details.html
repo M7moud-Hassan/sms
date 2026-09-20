@@ -76,6 +76,7 @@
       <th>Diesel Filter</th>
       <th>Air Filter</th>
       <th>Created at</th>
+      <th>Meter</th>
     </tr>
   </thead>
   <tbody id="oils_body" style="height: 52px;">
@@ -91,87 +92,46 @@
       <th>Litres</th>
       <th>Amount</th>
       <th>Created at</th>
+      <th>Meter</th>
     </tr>
   </thead>
   <tbody id="fuels_body" style="height: 52px;">
   </tbody>
+  <tfoot style="background-color: lightgrey; font-weight: bold; text-align: center;">
+    <tr>
+      <th>Total</th>
+      <th></th>
+      <th id="fuels_litres_total">0</th>
+      <th id="fuels_amount_total">0</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </tfoot>
 </table>
 </div>
     </div>
-<!-- Toast container for notifications -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position: fixed;  /* Ensures the container stays fixed */
-      top: 20px;        /* Distance from the top of the viewport */
-      right: 20px;      /* Distance from the right edge of the viewport */
-      z-index: 1050;    /* Ensures the toasts appear on top of other elements */
-      min-width: 300px; /* Optional: Set a minimum width for the toasts */
-  }"></div>
+
+    <!-- Meter image modal -->
+    <div class="modal fade" id="meterModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Meter Image</h5>
+            <button type="button" class="close meter-close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body text-center">
+            <img id="meterModalImage" src="" alt="Meter" class="img-fluid">
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- Include Bootstrap JS and dependencies -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-    fetch('/drivers/fetch-pmissions/')
-      .then(response => response.json())
-      .then(data => {
-        const pmissions = data.pmissions;
-        const toastContainer = document.getElementById('toast-container');
-        pmissions.forEach(function(mission) {
-          const toastHTML = `
-            <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
-              <div class="toast-header">
-                <strong class="mr-auto">${mission.customer_name}</strong>
-              </div>
-              <div style="background-color: lightgrey; font-weight: bold;" class="toast-body">
-                From: ${mission.from_location}<br>
-                To: ${mission.to_location}<br>
-                Vehicle: ${mission.car_type} (${mission.car_num})
-              </div>
-            </div>
-          `;
-          toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-          // Mark the mission as read after displaying the toast
-          markAsRead(mission.id);
-        });
-
-        $('.toast').toast('show');
-      })
-      .catch(error => {
-        console.error('Error fetching PMissions:', error);
-      });
-
-    function markAsRead(missionId) {
-      fetch(`/drivers/mark-as-read/${missionId}/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': getCookie('csrftoken'),  // Include CSRF token
-          'Content-Type': 'application/json'
-        },
-      }).then(response => response.json())
-        .then(data => {
-          console.log(`Mission ${missionId} marked as read`);
-        })
-        .catch(error => {
-          console.error('Error marking as read:', error);
-        });
-    }
-
-    // Function to get the CSRF token
-    function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-          const cookie = cookies[i].trim();
-          if (cookie.substring(0, name.length + 1) === (name + '=')) {
-            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-            break;
-          }
-        }
-      }
-      return cookieValue;
-    }
-  });
         // Set the inactivity time in milliseconds (5000 ms = 5 seconds)
         const inactivityTime = 300000;
         // Variable to hold the inactivity timer
@@ -251,9 +211,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     function displayFuels(fuels) {
         fuelsTableBody.innerHTML = '';
+        var totalLitres = 0, totalAmount = 0;
         fuels.forEach(function(fuel) {
             var driverName = fuel.driver__name || 'N/A';
             var formattedDate = formatDate(fuel.created_at);
+            totalLitres += Number(fuel.litres) || 0;
+            totalAmount += Number(fuel.amount) || 0;
             var row = `
                 <tr class="custom-row">
                     <td>${driverName}</td>
@@ -261,9 +224,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td>${fuel.litres}</td>
                     <td>${fuel.amount}</td>
                     <td>${formattedDate}</td>
+                    <td>${meterButton(fuel.meter_image)}</td>
                 </tr>`;
             fuelsTableBody.innerHTML += row;
         });
+        document.getElementById('fuels_litres_total').innerText = totalLitres.toFixed(2);
+        document.getElementById('fuels_amount_total').innerText = totalAmount.toFixed(2);
     }
 
     function displayOils(oils) {
@@ -284,6 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${dieselFilterSymbol}</td>
                 <td>${airFilterSymbol}</td>
                 <td>${formattedDate}</td>
+                <td>${meterButton(oil.meter_image)}</td>
             </tr>`;
 
         // Append the row to the table body
@@ -293,6 +260,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateCounts(countOils, countFuels) {
         countOilsCard.innerText = Number(countOils) || 0;
         countFuelsCard.innerText = Number(countFuels) || 0;
+    }
+    function meterButton(path) {
+        if (!path) return '—';
+        var url = (path.indexOf('http') === 0 || path.indexOf('/') === 0) ? path : ('/media/' + path);
+        return `<button type="button" class="btn-view-img view-meter" data-src="${url}"><i class="fas fa-tachometer-alt"></i> View</button>`;
     }
     function formatDate(dateString) {
         var options = {
@@ -306,6 +278,12 @@ document.addEventListener('DOMContentLoaded', function () {
         var date = new Date(dateString);
         return date.toLocaleString('en-US', options);
     }
+
+    // open the meter image in the modal (delegated — rows are added dynamically)
+    $(document).on('click', '.view-meter', function () {
+        $('#meterModalImage').attr('src', $(this).data('src'));
+        $('#meterModal').modal('show');
+    });
 });
     </script>
 </body>

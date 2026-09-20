@@ -11,7 +11,7 @@
     <meta name="keywords" content="admin, estimates, bootstrap, business, corporate, creative, management, minimal, modern, accounts, invoice, html5, responsive, CRM, Projects">
     <meta name="author" content="Dreamguys - Bootstrap Admin Template">
     <meta name="robots" content="noindex, nofollow">
-    <title>AlRoaya CRM</title>
+    <title>SMT</title>
       <!-- Favicon -->
     <link rel="shortcut icon" type="image/x-icon" href="{% static 'image/logo.png' %}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -33,11 +33,24 @@
     {% include 'parts/nav.html' %}
         {% if messages %}
         {% for message in messages %}
-        <div class="alert alert-warning alert-dismissible fade show" role="alert" style="margin-top: 0; margin-left: 30%; margin-right: 30%;">
+        <div class="alert alert-warning alert-dismissible fade show m-3 mx-auto" role="alert" style="max-width: 600px;">
           {{message}}
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endfor %}
+        {% endif %}
+
+        {% if request.user.is_authenticated %}
+        <!-- Pending missions notifications (shared, shows on all pages) -->
+        <div id="notif-panel" class="mt-3 mb-4" style="display:none; margin-left:30px; margin-right:30px;">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="mb-0"><i class="fas fa-bell text-warning"></i> Pending Missions
+              <span id="notif-count" class="badge bg-danger align-middle">0</span>
+            </h5>
+          </div>
+          <div id="notif-grid" class="row g-3"></div>
+        </div>
+        <script src="{% static 'js/notifications.js' %}"></script>
         {% endif %}
         {% block content %}
         {% endblock %}
