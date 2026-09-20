@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('card', '0005_remove_servicequota_expiration_date'),
-        ('drivers', '0059_drivers_status'),
+        ('drivers', '0009_remove_drivers_work_end_remove_drivers_work_start_and_more'),
     ]
 
     operations = [
