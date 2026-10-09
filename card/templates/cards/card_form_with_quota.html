@@ -1,7 +1,7 @@
-{% extends 'base.html' %}
+{% extends 'cards/base_page.html' %}
 {% load static %}
 {% block title %}{% if object %}Edit Card #{{ object.number_card }}{% else %}Issue New Card{% endif %}{% endblock %}
-{% block content %}
+{% block cards_content %}
 <div class="row justify-content-center">
     <div class="col-12 col-xl-10">
         <div class="card shadow-lg border-0 rounded-lg">

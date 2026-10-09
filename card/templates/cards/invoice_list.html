@@ -1,6 +1,6 @@
-{% extends 'base.html' %}
+{% extends 'cards/base_page.html' %}
 {% block title %}Invoices{% endblock %}
-{% block content %}
+{% block cards_content %}
 <style>
     #invoiceTable th {
         cursor: pointer;
@@ -27,6 +27,16 @@
     .invoice-pagination .btn:hover {
         background: linear-gradient(to right, #0056b3, #003d82);
     }
+    .quick-filter-label {
+        font-weight: 700;
+        color: #495057;
+        min-width: 72px;
+    }
+    .quick-filter-label::after { content: ":"; }
+    /* The sticky blue header needs an opaque backdrop now that the table scrolls
+       inside a bordered box rather than against the page background. */
+    #itable1 { background-color: #fff; }
+    #invoiceTable { margin-bottom: 0; }
     .invoice-pagination .current-page {
         font-size: 16px;
         font-weight: bold;
@@ -38,69 +48,79 @@
     }
 </style>
 
-<div class="container-fluid" style="margin-top: 20px;">
-    <form method="get" id="invoiceFilterForm">
-        <div class="row align-items-end mb-1">
-            <!-- Left: dates, type, search, search/export buttons -->
-            <div class="col-md-8 col-lg-9">
-                <div class="d-flex flex-wrap align-items-center">
-                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
-                        <span class="input-group-text bg-primary text-white px-2">From</span>
-                        <input type="date" id="start" name="start" class="form-control" value="{{ effective_start }}" style="min-width: 150px;">
-                    </div>
-                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
-                        <span class="input-group-text bg-primary text-white px-2">To</span>
-                        <input type="date" id="end" name="end" class="form-control" value="{{ effective_end }}" style="min-width: 150px;">
-                    </div>
-                    <div class="d-flex align-items-center me-3 mb-2 mb-md-0">
-                        <select name="invoice_type" id="invoice_type" class="form-select">
-                            <option value="">All Types</option>
-                            <option value="card" {% if invoice_type == 'card' %}selected{% endif %}>Card Issuance (Web)</option>
-                            <option value="service" {% if invoice_type == 'service' %}selected{% endif %}>Service Charges (Mobile)</option>
-                        </select>
-                    </div>
-                    <div class="me-3 mb-3">
-                        <input type="text" name="q" class="form-control" placeholder="Search Any Additional Field"
-                               value="{{ request.GET.q }}" style="height: 38px; min-width: 220px;">
-                    </div>
-                    <div class="d-flex mb-2 mb-md-0">
-                        <button type="submit" class="btn btn-primary me-2" style="min-width: 100px; height: 38px;">
-                            <i class="bi bi-search"></i> Search
-                        </button>
-                        <a href="{% url 'export_invoices_csv' %}?{{ request.GET.urlencode }}" class="btn btn-success" style="min-width: 100px; height: 38px;">
-                            <i class="bi bi-file-earmark-arrow-down"></i> Export
-                        </a>
-                    </div>
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-3">
+        <form method="get" id="invoiceFilterForm">
+            <!-- Row 1: the fields, all sharing one baseline -->
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-3 col-xxl-2">
+                    <label for="start" class="form-label fw-bold mb-1">From</label>
+                    <input type="date" id="start" name="start" class="form-control" value="{{ effective_start }}">
+                </div>
+                <div class="col-6 col-md-3 col-xxl-2">
+                    <label for="end" class="form-label fw-bold mb-1">To</label>
+                    <input type="date" id="end" name="end" class="form-control" value="{{ effective_end }}">
+                </div>
+                <div class="col-12 col-md-6 col-xxl-3">
+                    <label for="invoice_type" class="form-label fw-bold mb-1">Type</label>
+                    <select name="invoice_type" id="invoice_type" class="form-select">
+                        <option value="">All Types</option>
+                        <option value="card" {% if invoice_type == 'card' %}selected{% endif %}>Card Issuance (Web)</option>
+                        <option value="service" {% if invoice_type == 'service' %}selected{% endif %}>Service Charges (Mobile)</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-7 col-xxl-3">
+                    <label for="invoiceSearch" class="form-label fw-bold mb-1">Search</label>
+                    <input type="text" name="q" id="invoiceSearch" class="form-control"
+                           placeholder="Any additional field" value="{{ request.GET.q }}">
+                </div>
+                <div class="col-12 col-md-5 col-xxl-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                    <a href="{% url 'export_invoices_csv' %}?{{ request.GET.urlencode }}" class="btn btn-success flex-fill">
+                        <i class="bi bi-file-earmark-arrow-down"></i> Export
+                    </a>
                 </div>
             </div>
 
-            <!-- Right: quick-filter radios -->
-            <div class="col-md-4 col-lg-3">
-                <div class="d-flex flex-wrap justify-content-center align-items-center">
-                    <div class="form-check form-check-inline mx-1">
-                        <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfAll" value="all" {% if quick_filter == 'all' %}checked{% endif %}>
-                        <label class="form-check-label" for="qfAll">All</label>
+            <hr class="my-3">
+
+            <!-- Row 2: quick filters, split into the two groups they actually belong to
+                 instead of one centred block that wrapped mid-group. -->
+            <div class="row g-2">
+                <div class="col-12 col-lg-6">
+                    <div class="d-flex flex-wrap align-items-center">
+                        <span class="quick-filter-label">Status</span>
+                        <div class="form-check form-check-inline ms-1 me-3">
+                            <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfAll" value="all" {% if quick_filter == 'all' %}checked{% endif %}>
+                            <label class="form-check-label" for="qfAll">All</label>
+                        </div>
+                        {% for value, label in status_choices %}
+                        <div class="form-check form-check-inline me-3">
+                            <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfStatus{{ forloop.counter }}" value="{{ value }}" {% if quick_filter == value %}checked{% endif %}>
+                            <label class="form-check-label" for="qfStatus{{ forloop.counter }}">{{ label }}</label>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% for value, label in status_choices %}
-                    <div class="form-check form-check-inline mx-1">
-                        <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfStatus{{ forloop.counter }}" value="{{ value }}" {% if quick_filter == value %}checked{% endif %}>
-                        <label class="form-check-label" for="qfStatus{{ forloop.counter }}">{{ label }}</label>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="d-flex flex-wrap align-items-center">
+                        <span class="quick-filter-label">Payment</span>
+                        {% for value, label in payment_method_choices %}
+                        <div class="form-check form-check-inline ms-1 me-3">
+                            <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfMethod{{ forloop.counter }}" value="{{ value }}" {% if quick_filter == value %}checked{% endif %}>
+                            <label class="form-check-label" for="qfMethod{{ forloop.counter }}">{{ label }}</label>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
-                    <div class="w-100"></div>
-                    {% for value, label in payment_method_choices %}
-                    <div class="form-check form-check-inline mx-1">
-                        <input class="form-check-input quick-filter-radio" type="radio" name="quick_filter" id="qfMethod{{ forloop.counter }}" value="{{ value }}" {% if quick_filter == value %}checked{% endif %}>
-                        <label class="form-check-label" for="qfMethod{{ forloop.counter }}">{{ label }}</label>
-                    </div>
-                    {% endfor %}
                 </div>
             </div>
-        </div>
-    </form>
+        </form>
+    </div>
 </div>
 
-<div id="itable1" class="scrollable-div" style="margin: 25px;">
+<div id="itable1" class="scrollable-div table-responsive border rounded">
 <table class="table" id="invoiceTable">
   <thead>
     <tr>
@@ -170,7 +190,7 @@
 </table>
 </div>
 
-<div class="container-fluid mb-3 px-0 px-md-2" style="margin-left: 20px;">
+<div class="mt-3 mb-2">
   <div class="row g-2 g-md-3 align-items-center">
     <!-- Count of Invoices -->
     <div class="col-12 col-sm-6 col-md-4 col-lg-3">
@@ -190,7 +210,7 @@
 
     <!-- Pagination -->
     <div class="col-12 col-md-4 col-lg-6 d-flex justify-content-end">
-      <div class="invoice-pagination" style="margin-right: 30px;">
+      <div class="invoice-pagination">
         {% if page_obj.has_previous %}
           <a href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page=1" class="btn">« First</a>
           <a href="?{% if query_params %}{{ query_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}" class="btn">‹ Prev</a>
@@ -246,7 +266,7 @@
 
         // Fit the table's scroll area to the viewport, like the rest of the CRM.
         function setDynamicHeight() {
-            document.getElementById('itable1').style.height = (window.innerHeight * 0.55) + 'px';
+            document.getElementById('itable1').style.maxHeight = (window.innerHeight * 0.6) + 'px';
         }
         setDynamicHeight();
         window.addEventListener('resize', setDynamicHeight);

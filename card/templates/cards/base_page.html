@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% comment %}
+Page shell for every card-app screen.
+
+The card app's templates were written against a base template that wrapped the
+content block in its own padded container. The project base (templates/base.html)
+drops the block straight into <body>, so without this shell each card page renders
+flush against both screen edges and wide tables push the layout past the viewport.
+Card pages extend this instead of the project base and fill cards_content.
+{% endcomment %}
+
+{% block content %}
+<style>
+    .cards-page {
+        padding: 24px 30px 40px;
+        /* Nothing inside a page may widen the document: a wide table scrolls in its
+           own .table-responsive wrapper instead of dragging the page off-screen. */
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    @media (max-width: 768px) {
+        .cards-page {
+            padding: 16px 12px 32px;
+        }
+    }
+
+    /* Tables keep their own horizontal scrollbar rather than overflowing the page. */
+    .cards-page .table-responsive {
+        max-width: 100%;
+    }
+
+    /* styles.css rotates the 50px "No data available" watermark about its centre,
+       which otherwise sticks out past the table on narrow screens. */
+    .cards-page .no-data-message {
+        overflow: hidden;
+    }
+</style>
+
+<div class="cards-page">
+    {% block cards_content %}{% endblock %}
+</div>
+{% endblock %}

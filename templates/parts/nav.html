@@ -145,6 +145,56 @@ i {
 	}
 }
 
+/* The menu gained a tenth item ("Cards") with the card app. On anything narrower
+   than a desktop monitor the row stopped fitting, so the last item and the white
+   active-tab highlight that tracks it were cut off by the overflow:hidden on
+   #navbarSupportedContent - the highlight appeared to run off the screen edge.
+   Tighten the per-item padding just enough to fit, in steps, so wide screens keep
+   the original spacing. */
+@media (min-width: 992px){
+	#navbarSupportedContent ul li a{
+		white-space: nowrap;
+	}
+}
+@media (min-width: 992px) and (max-width: 1700px){
+	#navbarSupportedContent ul li a{
+		padding-left: 13px;
+		padding-right: 13px;
+	}
+}
+@media (min-width: 992px) and (max-width: 1450px){
+	#navbarSupportedContent ul li a{
+		padding-left: 9px;
+		padding-right: 9px;
+		font-size: 15px !important;
+	}
+}
+@media (min-width: 992px) and (max-width: 1330px){
+	#navbarSupportedContent ul li a{
+		padding-left: 6px;
+		padding-right: 6px;
+		font-size: 14px !important;
+	}
+	.navbar-logo img{
+		width: 120px !important;
+		height: 33px !important;
+	}
+}
+@media (min-width: 992px) and (max-width: 1150px){
+	#navbarSupportedContent ul li a{
+		padding-left: 4px;
+		padding-right: 4px;
+		font-size: 13px !important;
+	}
+	#navbarSupportedContent ul li a i{
+		display: none;
+	}
+	.navbar-logo img{
+		width: 105px !important;
+		height: 29px !important;
+	}
+}
+
 @media (max-width: 991px){
 	#navbarSupportedContent ul li a{
 		padding: 12px 30px;
@@ -260,6 +310,16 @@ i {
 
     $(document).ready(function () {
         test();
+
+        // test() measures the active item, but at DOM-ready the Font Awesome and
+        // Bootstrap Icons webfonts are usually still loading. When they arrive the
+        // menu items shift sideways and the highlight is left stranded a few dozen
+        // pixels off - most visibly on the last item, where it looked like the tab
+        // was sliding off the edge of the screen. Re-measure once everything settles.
+        $(window).on('load', function(){ test(); });
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function(){ test(); });
+        }
 
         // Adjust the horizontal selector on window resize
         $(window).on('resize', function(){
